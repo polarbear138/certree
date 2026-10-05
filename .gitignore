@@ -1,0 +1,17 @@
+.cache/
+node_modules/
+dist/
+data/
+.env
+.env.*
+!.env.example
+*.exe
+*.tsbuildinfo
+coverage*
+artifacts/
+playwright-report/
+test-results/
+*.db*
+*.pem
+*.key
+!tests/fixtures/

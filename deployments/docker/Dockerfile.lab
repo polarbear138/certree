@@ -1,0 +1,18 @@
+FROM golang:1.27.1-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN go build -o /lab ./cmd/lab
+FROM debian:bookworm-slim AS mail
+COPY --from=build /lab /lab
+ENTRYPOINT ["/lab"]
+FROM debian:bookworm-slim AS nginx
+RUN apt-get update && apt-get install -y --no-install-recommends nginx openssh-server ca-certificates && rm -rf /var/lib/apt/lists/* && useradd -m -u 10001 -s /bin/sh certree && passwd -d certree && mkdir -p /run/sshd /srv/nginx /home/certree/.ssh && ln -s /usr/sbin/nginx /usr/local/bin/nginx
+COPY deployments/docker/lab-entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+EXPOSE 22 8443
+ENTRYPOINT ["/entrypoint.sh"]
+FROM build AS runner
+ENV CERTREE_LAB_DIR=/fixtures CERTREE_LAB_HOST=nginx CERTREE_LAB_SSH_PORT=22 CERTREE_LAB_TLS_PORT=8443 CERTREE_LAB_SMTP=mail:1025 CERTREE_LAB_IMAP_HOST=mail CERTREE_LAB_IMAP_PORT=993
+CMD ["go","test","-tags=integration","-v","./internal/app"]

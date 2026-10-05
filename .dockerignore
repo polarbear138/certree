@@ -1,0 +1,13 @@
+.git
+.cache
+node_modules
+**/node_modules
+**/dist
+data
+.env
+.env.*
+!.env.example
+*.exe
+test-results
+playwright-report
+tests/lab-data

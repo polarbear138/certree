@@ -1,0 +1,10 @@
+name: Feature proposal
+description: Propose a concrete improvement within the supported scope.
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: User problem and proposed behavior}
+    validations: {required: true}
+  - type: textarea
+    id: validation
+    attributes: {label: Security assumptions and validation approach}

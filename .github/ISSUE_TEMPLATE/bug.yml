@@ -1,0 +1,15 @@
+name: Bug report
+description: Report an isolated, reproducible issue. Report security vulnerabilities privately.
+body:
+  - type: input
+    id: version
+    attributes: {label: Version and platform}
+    validations: {required: true}
+  - type: textarea
+    id: reproduce
+    attributes: {label: Reproduction, description: Use disposable test resources. Do not include secrets or production endpoints.}
+    validations: {required: true}
+  - type: textarea
+    id: behavior
+    attributes: {label: Expected and actual behavior}
+    validations: {required: true}

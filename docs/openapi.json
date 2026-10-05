@@ -1,0 +1,1887 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Certree API",
+    "version": "0.1.0",
+    "description": "Administrator-only API. JSON metadata fields in SQL lists are serialized JSON strings; tree data is expanded. Uploaded trust roots do not grant issuer trust. All state changes require matching Origin and session CSRF header."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "security": [
+    {
+      "session": []
+    }
+  ],
+  "paths": {
+    "/system/health": {
+      "get": {
+        "summary": "Database availability and version",
+        "operationId": "get__system_health",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Create an eight-hour browser session",
+        "operationId": "post__auth_login",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          }
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Current administrator and session CSRF token",
+        "operationId": "get__auth_me",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Revoke current session",
+        "operationId": "post__auth_logout",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "summary": "Rotate password and revoke every session",
+        "operationId": "post__auth_password",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Password"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tree": {
+      "get": {
+        "summary": "Relational tree projection",
+        "operationId": "get__tree",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/tree/summary": {
+      "get": {
+        "summary": "Inventory counts and aggregated status",
+        "operationId": "get__tree_summary",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tree/nodes/{id}": {
+      "get": {
+        "summary": "Stable tree node details",
+        "operationId": "get__tree_nodes_id",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/organizations": {
+      "get": {
+        "summary": "List organizations",
+        "operationId": "get__organizations",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create organizations",
+        "operationId": "post__organizations",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Organization"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/environments": {
+      "get": {
+        "summary": "List environments",
+        "operationId": "get__environments",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create environments",
+        "operationId": "post__environments",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Environment"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servers": {
+      "get": {
+        "summary": "List servers",
+        "operationId": "get__servers",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create servers",
+        "operationId": "post__servers",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Server"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/targets": {
+      "get": {
+        "summary": "List targets",
+        "operationId": "get__targets",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create targets",
+        "operationId": "post__targets",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Target"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/collectors": {
+      "get": {
+        "summary": "List collectors",
+        "operationId": "get__collectors",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create collectors",
+        "operationId": "post__collectors",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Collector"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/certificates": {
+      "get": {
+        "summary": "Latest versions and public validation metadata",
+        "operationId": "get__certificates",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Import bundle; returns version_id",
+        "operationId": "post__certificates",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Upload"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/certificates/{id}": {
+      "get": {
+        "summary": "Certificate, immutable versions, and targets",
+        "operationId": "get__certificates_id",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/certificates/versions/{id}/approve": {
+      "post": {
+        "summary": "Approve a currently trusted valid version",
+        "operationId": "post__certificates_versions_id_approve",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Validation"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/servers/{id}": {
+      "get": {
+        "summary": "Public registered server details",
+        "operationId": "get__servers_id",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/servers/{id}/test": {
+      "post": {
+        "summary": "Pinned SSH authentication and SFTP check",
+        "operationId": "post__servers_id_test",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/deployments": {
+      "get": {
+        "summary": "Latest 200 persistent jobs",
+        "operationId": "get__deployments",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Explicitly approve and queue target operation",
+        "operationId": "post__deployments",
+        "responses": {
+          "202": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deployments/{id}": {
+      "get": {
+        "summary": "Job, stage events, and TLS evidence",
+        "operationId": "get__deployments_id",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/deployments/{id}/cancel": {
+      "post": {
+        "summary": "Cancel a Pending job only",
+        "operationId": "post__deployments_id_cancel",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/collectors/{id}/poll": {
+      "post": {
+        "summary": "Queue a poll for the next worker polling cycle",
+        "operationId": "post__collectors_id_poll",
+        "responses": {
+          "202": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/collectors/{id}/test": {
+      "post": {
+        "summary": "Test verified IMAP TLS login and mailbox access",
+        "operationId": "post__collectors_id_test",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/collector-events": {
+      "get": {
+        "summary": "Latest 200 public collector-events",
+        "operationId": "get__collector-events",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/verifications": {
+      "get": {
+        "summary": "Latest 200 public verifications",
+        "operationId": "get__verifications",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "summary": "Latest 200 public audit-logs",
+        "operationId": "get__audit-logs",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Current expiry warning configuration",
+        "operationId": "get__settings",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Set expiry warning days",
+        "operationId": "put__settings",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Settings"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "certree_session"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Identity": {
+        "type": "object",
+        "properties": {
+          "User": {
+            "type": "string"
+          },
+          "CSRF": {
+            "type": "string"
+          }
+        }
+      },
+      "ID": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "Login": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 72,
+            "writeOnly": true
+          }
+        }
+      },
+      "Password": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 14,
+            "maxLength": 72,
+            "writeOnly": true
+          }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        }
+      },
+      "Environment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "organization_id"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Server": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "host",
+          "port",
+          "user",
+          "type",
+          "host_key",
+          "ssh_key"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "user": {
+            "type": "string"
+          },
+          "type": {
+            "const": "nginx"
+          },
+          "host_key": {
+            "type": "string",
+            "description": "Independently verified pinned OpenSSH host public key"
+          },
+          "ssh_key": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Unencrypted input PEM/OpenSSH key, encrypted at rest"
+          }
+        }
+      },
+      "Target": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "server_id",
+          "certificate_id",
+          "host",
+          "port",
+          "sni",
+          "certificate_path",
+          "key_path",
+          "configuration_path",
+          "backup_path"
+        ],
+        "properties": {
+          "server_id": {
+            "type": "string"
+          },
+          "endpoint_id": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "certificate_path": {
+            "type": "string"
+          },
+          "key_path": {
+            "type": "string"
+          },
+          "configuration_path": {
+            "type": "string"
+          },
+          "backup_path": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "sudo": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "JobRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_id",
+          "version_id"
+        ],
+        "properties": {
+          "target_id": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "Deployment",
+              "Verification",
+              "Recovery"
+            ],
+            "default": "Deployment",
+            "description": "Recovery deploys an explicitly selected previous approved valid version"
+          }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expiry_days"
+        ],
+        "properties": {
+          "expiry_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          }
+        }
+      },
+      "Collector": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "environment_id",
+          "host",
+          "port",
+          "username",
+          "password",
+          "interval"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "mailbox": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "interval": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          }
+        }
+      },
+      "Upload": {
+        "type": "object",
+        "required": [
+          "environment_id",
+          "files"
+        ],
+        "properties": {
+          "environment_id": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "PKCS#12 import password; not retained"
+          },
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "description": "16 MiB aggregate input maximum; content detected"
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "required": [
+          "id",
+          "entity_id",
+          "type",
+          "name",
+          "status",
+          "counts",
+          "children"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "root",
+              "organization",
+              "environment",
+              "certificate",
+              "target"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "Healthy",
+              "Warning",
+              "Failed",
+              "Pending",
+              "Deploying",
+              "Unknown"
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            }
+          },
+          "data": {
+            "type": "object",
+            "description": "Public entity metadata, never secret material"
+          }
+        }
+      },
+      "Validation": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "key_match": {
+            "type": "boolean"
+          },
+          "trusted": {
+            "type": "boolean"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "List": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        }
+      },
+      "Detail": {
+        "type": "object"
+      }
+    }
+  }
+}

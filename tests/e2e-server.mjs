@@ -1,0 +1,13 @@
+import {spawn}from'node:child_process';
+import{randomBytes}from'node:crypto';
+import{mkdtempSync,rmSync,writeFileSync}from'node:fs';
+import{tmpdir}from'node:os';
+import{resolve,dirname}from'node:path';
+import{fileURLToPath}from'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const dir=mkdtempSync(resolve(tmpdir(),'certree-e2e-'));
+const binary=resolve(root,'.cache',process.platform==='win32'?'certree.exe':'certree');
+const child=spawn(binary,[],{cwd:root,stdio:'inherit',env:{...process.env,CERTREE_ADDRESS:'127.0.0.1:8087',CERTREE_ORIGIN:'http://127.0.0.1:8087',CERTREE_DEV_HTTP:'true',CERTREE_DB:resolve(dir,'test.db'),CERTREE_MASTER_KEY:randomBytes(32).toString('base64'),CERTREE_ADMIN_USER:'admin',CERTREE_ADMIN_PASSWORD:'test-admin-password-2026',CERTREE_TRUST_BUNDLE:resolve(root,'.cache/lab/ca.pem')}});
+writeFileSync(resolve(root,'.cache/e2e.pid'),String(child.pid));
+child.on('exit',code=>{try{rmSync(dir,{recursive:true,force:true})}catch{}process.exit(code||0)});
+for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>child.kill(sig));

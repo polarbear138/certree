@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Explicit isolated test passwords and non-secret CI configuration values"
+regexTarget = "match"
+regexes = ['''test-admin-password-2026''', '''changed-password-for-testing''', '''ci-config-only-no-deployment''', '''AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=''']
