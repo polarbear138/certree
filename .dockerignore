@@ -11,3 +11,6 @@ data
 test-results
 playwright-report
 tests/lab-data
+
+# Host-specific update profile (never commit or package installation state).
+.local/

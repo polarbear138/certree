@@ -66,13 +66,14 @@ func (a *App) BuildTree() (*Node, error) {
 	if e != nil {
 		return nil, e
 	}
-	targets, e := a.Store.Rows(`SELECT t.*,e.host,e.port,e.sni,e.server_id,s.name server_name FROM deployment_targets t JOIN server_endpoints e ON e.id=t.endpoint_id JOIN servers s ON s.id=e.server_id ORDER BY s.name`)
+	targets, e := a.Store.Rows(`SELECT t.*,e.host,e.port,e.sni,e.server_id,s.name server_name,av.metadata active_metadata FROM deployment_targets t LEFT JOIN certificate_versions av ON av.id=t.active_version JOIN server_endpoints e ON e.id=t.endpoint_id JOIN servers s ON s.id=e.server_id ORDER BY s.name`)
 	if e != nil {
 		return nil, e
 	}
 	var ds string
 	a.Store.DB.QueryRow("SELECT value FROM settings WHERE key='expiry_days'").Scan(&ds)
 	days, _ := strconv.Atoi(ds)
+	serverExpiry := summarizeExpiry(targets, days, time.Now())
 	byOrg, byEnv, byCert := map[string]*Node{}, map[string]*Node{}, map[string]*Node{}
 	for _, o := range orgs {
 		id := o["id"].(string)
@@ -121,6 +122,8 @@ func (a *App) BuildTree() (*Node, error) {
 		id := v["id"].(string)
 		n := node("target:"+id, id, "target", v["server_name"].(string)+" · "+v["sni"].(string), v["status"].(string))
 		n.Data = v
+		n.Data["server_expiry"] = serverExpiry[v["server_id"].(string)]
+		delete(n.Data, "active_metadata")
 		if p := byCert[v["certificate_id"].(string)]; p != nil {
 			p.Children = append(p.Children, n)
 		}

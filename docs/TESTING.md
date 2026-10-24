@@ -12,6 +12,34 @@ One test constructs 1,000 target rows and verifies the tree projection without d
 
 Vitest checks tree flattening, stable IDs, search ancestry, status filters, and empty results. Playwright starts the compiled Go API with a temporary SQLite database and generated CA, then runs login, organization/environment creation, bundle upload, approval, selection, status/search changes, theme switching, settings changes, responsive layout, and logout. Browser page errors fail the test. Screenshots are generated from actual fixture data.
 
+## Installation update and isolated UI tests
+
+From the repository root, Python unit tests cover profile capture, retained database
+identity, keys/trust/host variables, literal configuration values, missing storage,
+build failure and Git-pull safeguards:
+
+```sh
+python3 -m unittest discover -s tests -p test_update.py
+```
+
+These mock Docker calls. A real populated-install update is a separate release gate.
+For the isolated History/Tree browser flows, from `apps/web`:
+
+```sh
+npx playwright install chromium
+npx playwright test --config playwright.history.config.ts
+```
+
+That configuration starts Vite and uses mocked API responses. It exercises server
+filtering, selected-version submission, partial/mixed tree selection and responsive
+expiry UI; it does not establish a successful Nginx deployment. The ordinary
+`npm run e2e` workflow also includes tests that start the compiled API.
+
+Bulk backend tests cover preview without side effects, explicit reviewed versions,
+approval revalidation, duplicate targets, queued work and per-server admission.
+Expiry tests distinguish the applied version from a newer imported version and
+keep unknown/undeployed targets in server summaries.
+
 ## Docker integration
 
 Use `compose.lab.yaml` with `--abort-on-container-exit --exit-code-from tests tests`. The fixture container generates a disposable CA, two valid versions, invalid-period versions, SSH identities, and a mail server certificate. The lab Nginx master runs as a service account; OpenSSH validates the generated client key. The local mail fixture accepts SMTP and appends to its TLS IMAP mailbox. It is isolated test infrastructure, not a production mail server.

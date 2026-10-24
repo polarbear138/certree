@@ -6,6 +6,12 @@ Run `go run ./cmd/setup` once, restrict `.env` access, and run `docker compose u
 
 For a custom trust root, mount the operator's PEM trust bundle read-only into the API service and set `CERTREE_TRUST_BUNDLE` to that container path. Certificates from that CA must still include a matching key and valid chain. Never copy a private CA key into the API container.
 
+## Updating an existing installation
+
+Use the [installation-preserving update command](UPDATING.md). Capture the existing
+application container once; later updates can pull source and rebuild only the app
+without reconstructing environment variables or changing the database volume.
+
 ## Nginx target prerequisites
 
 Use a dedicated SSH account with public-key authentication. Configure verified host-key pinning, SFTP, fsync and POSIX rename extensions. Its writable certificate and private key paths must be on filesystems supporting atomic rename. The target configuration path must be the main Nginx configuration, since the adapter uses `nginx -c` for both test and reload. Nginx must be on the SSH account's PATH.
@@ -20,7 +26,7 @@ SSH host and TLS verification host are configured separately. Set a concrete dom
 
 Deploying a certificate creates a persistent job. Success requires real activation. Rolled Back means the requested deployment failed but the previous files, Nginx config/reload, and restored fingerprint were verified. Recovery Failed requires immediate manual investigation. Job details include stages and TLS evidence; no private key or remote configuration content is shown.
 
-Select a previous approved, still-valid version to restore it through the ordinary pipeline. Expired or untrusted historical versions cannot be manually deployed. Pending jobs can be cancelled via the API. Running jobs complete or recover; killing a process leaves the durable backup for restart recovery.
+Select a previous approved, still-valid version to restore it through the ordinary pipeline. Expired or untrusted historical versions cannot be manually deployed. Queued and Pending jobs can be cancelled via the API. Running jobs complete or recover; killing a process leaves the durable backup for restart recovery.
 
 ## Backup and restore
 

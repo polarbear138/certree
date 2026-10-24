@@ -8,7 +8,7 @@ import (
 
 func (a *App) Run(ctx context.Context) {
 	// Interrupted deployments are recovered, never blindly replayed.
-	a.Store.DB.Exec("UPDATE deployment_jobs SET status='Recovering',stage='Interrupted; recovery required' WHERE status='Running' AND kind='Deployment'")
+	a.Store.DB.Exec("UPDATE deployment_jobs SET status='Recovering',stage='Interrupted; recovery required' WHERE status='Running' AND kind='Deployment' AND server_id NOT IN (SELECT id FROM agents)")
 	a.Store.DB.Exec("UPDATE deployment_jobs SET status='Pending',stage='Interrupted; verification retry' WHERE status='Running' AND kind='Verification'")
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
@@ -43,8 +43,12 @@ func (a *App) Monitor() {
 	}
 }
 func (a *App) WorkOne(ctx context.Context) bool {
+	a.promoteQueued()
+	if a.workAgentVerification(ctx) {
+		return true
+	}
 	var id, target, version, kind, status string
-	e := a.Store.DB.QueryRow("SELECT id,target_id,version_id,kind,status FROM deployment_jobs WHERE status IN ('Pending','Recovering') AND next_run<=? ORDER BY created_at LIMIT 1", time.Now().Unix()).Scan(&id, &target, &version, &kind, &status)
+	e := a.Store.DB.QueryRow("SELECT id,target_id,version_id,kind,status FROM deployment_jobs WHERE status IN ('Pending','Recovering') AND (kind='Verification' OR server_id NOT IN (SELECT id FROM agents)) AND next_run<=? ORDER BY created_at LIMIT 1", time.Now().Unix()).Scan(&id, &target, &version, &kind, &status)
 	if e != nil {
 		return false
 	}
@@ -73,7 +77,9 @@ func (a *App) WorkOne(ctx context.Context) bool {
 		return true
 	}
 	validation := b.Validate(a.Roots, t.SNI)
-	if !validation.Valid {
+	var approved int
+	a.Store.DB.QueryRow("SELECT approved FROM certificate_versions WHERE id=?", version).Scan(&approved)
+	if !validation.Valid || approved != 1 {
 		a.finish(id, target, "Failed", "certificate no longer valid")
 		return true
 	}

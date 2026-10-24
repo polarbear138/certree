@@ -1,145 +1,208 @@
 # Certree
 
-**TLS Certificate Management, Root to Leaf.**
+**Self-hosted TLS certificate deployment with proof of activation.**
 
-Certree is an open-source TLS certificate lifecycle manager for infrastructure that receives certificate bundles and deploys them to Nginx. It collects, validates, stores, deploys, and checks the certificate actually served by a TLS endpoint.
+Certree helps infrastructure operators take an externally issued certificate bundle
+from import and approval to Nginx deployment, then verify the certificate actually
+served by the endpoint. It brings certificate inventory, server relationships,
+expiry visibility and deployment evidence into one console.
 
-**v0.1.0 release candidate:** the application and local API/browser tests run. The real Nginx/OpenSSH Docker integration suite is provided but has not yet been executed on the development machine. Complete that release gate before using this candidate on production infrastructure. See [verification results](docs/VERIFICATION.md).
+[한국어](README.ko.md) · [Getting started](docs/GETTING_STARTED.md) ·
+[Operations](docs/OPERATIONS.md) · [Client agent](docs/AGENT.md) ·
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-## Why Certree?
+**Status:** v0.1.0 candidate; the outbound Linux agent is a development preview.
+Source, test fixtures and CI definitions are available. Real Linux Nginx/systemd,
+Docker integration and release/security gates remain to be completed and recorded.
+See the dated [verification report](docs/VERIFICATION.md) for what actually ran.
 
-Certificate issuance is not certificate deployment. File replacement and reload are not proof of activation. Certree only marks a job successful after a trusted TLS handshake, hostname validation, and an exact SHA-256 leaf fingerprint match.
+## The problem
 
-## Features
+Issuing a certificate does not ensure every server is using it. Teams that receive
+PEM or PKCS#12 bundles still need to associate them with the correct endpoints,
+review their trust and key pair, replace files, reload the service, and check the
+result. A successful copy or reload can leave a stale certificate serving traffic.
 
-- Administrator login, password rotation, bcrypt hashing, bounded login attempts, expiring HttpOnly sessions, Secure cookies, and CSRF checks.
-- Organizations and environments, a searchable tree, status filters, keyboard navigation, virtualized rows, selection details, and light/dark themes.
-- Content-based PEM/DER certificate and key parsing, PFX/P12 passwords, bounded ZIP bundles, duplicate detection, immutable versions, and comparisons.
-- X.509 lifetime, SAN/hostname, chain/trust, and private-key matching validation. Invalid or unapproved versions cannot deploy.
-- Encrypted private keys, SSH credentials, and IMAP passwords using AES-256-GCM; metadata APIs never return secrets.
-- Public-key SSH with mandatory pinned host identities. Nginx deployment uses restricted staging, backups, atomic per-file replacement, configuration testing, reload, and live TLS verification.
-- Persistent deployment/verification jobs, per-server concurrency exclusion, verification backoff, interrupted deployment recovery, rollback results, and audit history.
-- TLS IMAP collection, attachment inspection, UID/UIDVALIDITY deduplication, bounded polling retries, and mandatory administrator approval.
-- Five-minute live verification of known active versions. Expiration status is evaluated when the inventory tree is read.
+Certree treats a trusted TLS handshake, hostname validation and an exact SHA-256
+leaf fingerprint match as the final deployment check. Failed deployment and
+recovery results stay visible instead of being collapsed into a successful reload.
 
-## Tree-Based Management
+## Who it is for
 
-```text
-Certree
-└── Organization
-    └── Environment
-        └── Certificate
-            ├── Nginx service endpoint · Healthy
-            └── Nginx service endpoint · Failed
-```
+- Operators managing Nginx endpoints on Linux and certificates issued elsewhere.
+- Teams that need an explicit approval step and a record of what was deployed.
+- Contributors exploring reproducible certificate deployment and recovery tests.
 
-The tree is a projection of relational entities. Servers and certificates connect through service endpoints and deployment targets. A server can host several certificates, and a certificate can connect to several servers. Node IDs remain stable. Parent details report descendant counts, including certificate-level validation/expiration warnings; upper-level bulk deployment is a read-only preview.
+The first adapter is Nginx. Certree does not issue certificates, replace an ACME
+client, or currently support Apache, IIS, Tomcat, HAProxy or Kubernetes adapters.
+It is a single-administrator, single-process application in this candidate.
 
-## Architecture
+## What is implemented
 
-```text
-Browser → HTTPS reverse proxy → Go REST API → SQLite (WAL)
-                                  ├── upload / TLS IMAP collectors
-                                  ├── X.509 validation + encrypted secrets
-                                  ├── persistent worker → SSH/SFTP → Nginx
-                                  └── independent live TLS verification
-```
+| Area | Current behavior |
+| --- | --- |
+| Inventory | Organizations → environments → certificates → server endpoints, searchable tree, status filters and keyboard navigation |
+| Bundle validation | Content-based PEM/DER/PKCS#12/bounded ZIP parsing, key matching, hostname, validity and operator-controlled trust checks |
+| Approval and versions | Immutable certificate versions; explicit approval required before deployment |
+| Deployment | Pinned SSH/SFTP or an outbound HTTPS Linux agent; Nginx configuration test, reload, restricted backups and recovery |
+| Bulk operations | Filtered tree checkboxes, reviewed concrete approved versions, per-target results and durable per-server queues; up to 200 targets per batch |
+| Expiry | Remaining days and lifetime bars based on the last verified applied certificate; server summaries show the earliest known expiry and unknown/undeployed counts |
+| History | Separate Verification and Deployments views with server filtering and detailed job evidence; Verification is the default |
+| Collection | TLS IMAP attachment import with deduplication and mandatory administrator approval |
+| Monitoring | Live verification of known active versions every five minutes; this creates verification jobs, not recurring deployments |
+| Installation updates | Capture an existing Compose installation and rebuild only the application while retaining its DB, key, trust mounts and project identity |
 
-React, TypeScript, Vite, Tailwind, TanStack Query, React Router, and Lucide power the console. Go standard `net/http`, `crypto/x509`, and `crypto/tls` handle the API and trust checks. SQLite uses the pure-Go modernc driver. Collector, Deployer, and Verifier are separate interfaces; v0.1 uses in-process adapters. Details: [architecture](docs/ARCHITECTURE.md), [OpenAPI 3.1](docs/openapi.json).
+Private keys, SSH credentials and mailbox passwords are encrypted at rest using
+AES-256-GCM. Administrator sessions use password hashing, bounded login attempts,
+HttpOnly cookies and Origin/CSRF checks. These controls have documented limits;
+read the [threat model](docs/SECURITY.md) before connecting real infrastructure.
 
-## Screenshots
+## Preview
 
-Captured from the running application using locally generated test certificates. These are test inventory records, not production deployment evidence.
+The Tree Explorer below uses generated local test inventory. The bulk-review
+screenshot uses simulated API fixtures to demonstrate ready and blocked targets;
+it is UI evidence, not proof of a production deployment.
 
-![Tree Explorer, light theme](docs/screenshots/tree-light.png)
+![Tree Explorer with local test inventory](docs/screenshots/tree-light.png)
 
-![Tree Explorer, dark theme](docs/screenshots/tree-dark.png)
+![Reviewed bulk deployment with ready and blocked targets](docs/screenshots/tree-bulk-review.png)
 
-## Quick Start
+## Try it locally
 
-Requires Docker Engine with Compose v2. Generate installation secrets with Go 1.27:
+For a new installation, use Docker Engine with Compose v2 and the Go version in
+[go.mod](go.mod). Building the container handles the frontend dependencies.
 
 ```sh
+git clone https://github.com/polarbear138/certree.git
+cd certree
 go run ./cmd/setup
 docker compose up -d --build
+docker compose ps
 ```
 
-The setup command creates a restricted `.env` with a random encryption master key and random initial administrator password. It refuses to overwrite existing configuration. Read the initial username/password from `.env`, then open **https://localhost:8443**. Change the password in Settings. The bootstrap password is ignored once the user exists.
+Open **https://localhost:8443** on the installation host. Setup writes the initial
+administrator credentials and a random encryption key to a mode-0600 `.env`; it
+refuses to overwrite an existing file. Read that file locally, sign in and change
+the password in Settings. Existing databases retain their existing account.
 
-The bundled Caddy proxy issues a local certificate using its internal CA. Export and trust its public root in your browser/OS through your usual local CA trust procedure:
+The bundled Caddy proxy uses a local CA. Export its **public root certificate**
+and trust it using your workstation's normal certificate-management process:
 
 ```sh
 docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt ./certree-local-root.crt
 ```
 
-For an internal organizational hostname, update `CERTREE_ORIGIN` and the Caddyfile together and provision a certificate trusted by your administrators. The default published port binds **127.0.0.1**, and the API container exposes no host port. Database data and Caddy trust state use persistent volumes. Back up the master key separately; losing it makes stored secrets unrecoverable.
+The default listener is **127.0.0.1:8443**, so a remote PC cannot reach it directly.
+For a Linux server accessed from another machine, use the [remote-access setup and
+troubleshooting guide](docs/GETTING_STARTED.md#remote-access). Preserve the existing
+DB volume and encryption key when upgrading an installation.
 
-Create an organization/environment in Tree Explorer, upload a bundle in Certificates, review and approve its version in Tree Explorer, register a server, add a deployment target, then deploy from its detail panel. Configure operator-controlled additional trust roots using `CERTREE_TRUST_BUNDLE` and a read-only mounted PEM file; uploaded CA certificates never automatically become trusted roots.
+For the first workflow: create an organization/environment, import a bundle,
+review and approve a version, register a server/target, deploy, then inspect live
+TLS results. The [walkthrough](docs/GETTING_STARTED.md#first-certificate-workflow)
+explains which endpoint must be reachable and which CA the management server trusts.
 
-### Local development
+## Update an existing installation
 
-Go 1.27 and Node.js 26 are supported. On Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/dev.ps1
-```
-
-On Linux:
+Run this from the new source checkout once, using your existing **application**
+container name:
 
 ```sh
-sh scripts/dev.sh
+sh scripts/update.sh --container certree-certree-1
 ```
 
-Use `go run ./cmd/setup -dev -out .env.dev` when configuring manually. Development helpers use `.env.dev` and `data/dev.db` separately from Docker configuration. Development HTTP requires an explicit opt-in and a loopback listener. Docker installations always use Secure cookies. The Windows helper keeps dependency caches inside the project. For Vite HMR on port 5173, set the API's `CERTREE_ORIGIN` to `http://127.0.0.1:5173` and run the frontend with `npm run dev`.
+A two-server test installation may instead use
+`certree-two-server-test-certree-1`. The tool saves a restricted installation
+profile, pins the existing database mount, builds first and then replaces only the
+application. It preserves the proxy and refuses to create a missing DB volume.
+Later updates from the same Git checkout use:
 
-## Security
+```sh
+sh scripts/update.sh --pull
+```
 
-Read [SECURITY.md](SECURITY.md) and the [threat model](docs/SECURITY.md) before connecting servers. Use dedicated SSH accounts and restrict writable paths and Nginx commands. Verify host keys independently; key collection alone does not establish trust. Certree does not provide issuance, OCSP/CRL revocation checks, RBAC, or unattended email-based approval.
+This pulls with `--ff-only` and rebuilds the app. A source pull alone does not
+replace a running Docker image. Read [ZIP-to-Git migration, backup requirements
+and update limits](docs/UPDATING.md); keep any original directories that provide
+bind-mounted CA/configuration files.
 
-Only one Certree process may own a database. v0.1 has no HA or distributed worker support. Backups contain remote private keys in mode-0600 files within mode-0700 directories; apply disk encryption and your organization's retention policy. Review a deployment target's external verification host independently from its SSH host.
+## Architecture and boundaries
 
-## Supported Platforms
+```text
+Browser → HTTPS proxy → Go REST API → SQLite (WAL)
+                          ├── certificate import / TLS IMAP
+                          ├── X.509 validation + encrypted secrets
+                          ├── durable per-server deployment queue
+                          │     ├── pinned SSH/SFTP → Nginx
+                          │     └── outbound HTTPS agent → local Nginx
+                          └── independent live TLS verification
+```
 
-The management service runs on Linux (Docker) and Windows for local development. Deployment targets must be POSIX Nginx hosts with OpenSSH/SFTP support for `posix-rename@openssh.com` and `fsync@openssh.com`. Existing certificate/key/configuration files must be readable, destination directories writable, private keys restricted, and paths free of symlink ancestors. Configure a service account with narrowly scoped reload/test privileges if necessary. See [deployment operations](docs/OPERATIONS.md).
+The console uses React and TypeScript. Go supplies HTTP, X.509 and TLS handling;
+SQLite stores inventory, jobs and audit evidence. The application does not require
+an OpenAI account or API key to run. Codex assists development and maintenance;
+certificate approval and execution decisions remain explicit application checks.
+See [architecture](docs/ARCHITECTURE.md) and [OpenAPI](docs/openapi.json).
 
-IMAP uses implicit TLS and reads the newest 100 matching messages from the preceding 30 days per poll. Email import requires a complete valid bundle with one matching private key; certificate-only renewals require manual combining with the key. Password-protected email PKCS#12 attachments require manual import with a password. Polling is serialized with other background work; manually requested polls run on the next worker poll, normally within a minute.
+Current limits include no RBAC, HA, distributed worker ownership, OCSP/CRL checks,
+automatic secret rotation or remote backup retention. File replacement is atomic
+per file, not across the certificate/key pair. A sampled TLS handshake does not
+establish that every load-balancer backend is updated. See [operations](docs/OPERATIONS.md)
+and [security](SECURITY.md) for the complete operating assumptions.
 
-## Testing
+## Develop and verify
+
+Use Go as pinned in `go.mod`, Node.js 26 and Python 3 for update-tool tests.
 
 ```sh
 go test ./...
 go vet ./...
-cd apps/web && npm ci && npm test && npm run build
-```
-
-Browser tests use a real compiled API, temporary SQLite database, and generated CA:
-
-```sh
-mkdir -p .cache
-go build -o .cache/certree ./apps/server # Windows: .cache/certree.exe
-go run ./cmd/lab -generate .cache/lab
+python3 -m unittest discover -s tests -p test_update.py
+node scripts/validate-openapi.mjs
 cd apps/web
-npx playwright install chromium
-npm run e2e
+npm ci
+npm test
+npm run lint
+npm run build
 ```
 
-Real Nginx, SSH/SFTP, local SMTP, and TLS IMAP integration tests:
+Browser workflows, the real Nginx/OpenSSH/mail lab, agent integration and Linux
+race checks are documented in [testing](docs/TESTING.md). The workflow file
+[defines CI gates](.github/workflows/ci.yml); a defined gate is not evidence of a
+successful run. Dated outcomes and environmental blocks belong in
+[VERIFICATION.md](docs/VERIFICATION.md), tied to the revision under review.
 
-```sh
-docker compose -f compose.lab.yaml up --build --abort-on-container-exit --exit-code-from tests tests
-docker compose -f compose.lab.yaml down -v
-```
+For local development use `sh scripts/dev.sh` on Linux, or
+`powershell -ExecutionPolicy Bypass -File scripts/dev.ps1` on Windows. Both use
+separate development configuration and data. See the [contributor guide](CONTRIBUTING.md).
 
-The lab publishes no host ports, generates its own disposable CA/keys, and requires no external mail or production servers. The second command deliberately deletes only disposable lab volumes. Unit tests use explicit deployer doubles for worker failure transitions and real TLS sockets for activation results. The integration suite uses real Nginx/OpenSSH and intentional failure injection. See [testing](docs/TESTING.md).
+## Contribute and maintain
 
-## Roadmap
+Useful contributions include Linux integration evidence, recovery regressions,
+installation documentation, accessibility and scoped adapter work. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md), report ordinary bugs through
+[GitHub Issues](https://github.com/polarbear138/certree/issues), and follow
+[SECURITY.md](SECURITY.md) for sensitive findings.
 
-See [ROADMAP.md](ROADMAP.md). Apache, Tomcat, WebtoB, IIS, HAProxy, ACME, Kubernetes, RBAC, PostgreSQL, and complex bulk policies are future work.
+The [maintenance guide](docs/MAINTAINING.md) explains triage, review, evidence and
+release practices. The [roadmap](ROADMAP.md) separates implemented work from
+planned work and gives observable completion criteria. No adoption counts,
+independent audit, production SLA or successful external CI run are implied by
+these documents.
 
-## Contributing
+## Documentation
 
-Start with [CONTRIBUTING.md](CONTRIBUTING.md). CI runs Go tests/vet/race, frontend tests/build, Chromium workflows, dependency and secret scans, and Docker integration tests. Proposed changes must preserve explicit approval and live TLS verification. [Release notes](CHANGELOG.md) describe the current candidate.
+| Need | Guide |
+| --- | --- |
+| First install, remote access and first deployment | [Getting started](docs/GETTING_STARTED.md) · [한국어 시작 가이드](docs/GETTING_STARTED.ko.md) |
+| Connect an outbound Linux client | [Agent setup and operations](docs/AGENT.md) |
+| Updates without changing storage identity | [Updating](docs/UPDATING.md) |
+| Permissions, backups and recovery | [Operations](docs/OPERATIONS.md) |
+| Security assumptions and private reporting | [Security policy](SECURITY.md) · [Threat model](docs/SECURITY.md) |
+| Test commands and observed results | [Testing](docs/TESTING.md) · [Verification](docs/VERIFICATION.md) |
+| Maintainer workflows and release gates | [Maintaining](docs/MAINTAINING.md) · [Changelog](CHANGELOG.md) |
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [third-party notices](docs/THIRD_PARTY_NOTICES.md).
+Apache License 2.0. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
+[third-party notices](docs/THIRD_PARTY_NOTICES.md).

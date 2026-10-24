@@ -79,6 +79,42 @@ test("administrator creates a trust tree, uploads, approves, and inspects real d
   await page.getByLabel("Warning window (days)").fill("45");
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByText("Warning window saved.")).toBeVisible();
+  await page.getByLabel("Allowed environment").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Create registration key" }).click();
+  const registration = page
+    .getByRole("status")
+    .filter({ hasText: "Single-use key" });
+  await expect(registration).toBeVisible();
+  const token = await registration.locator("code").innerText();
+  expect(token).toMatch(/^[a-f0-9]{64}$/);
+  const enrolled = await page.request.post("/api/agent/v1/register", {
+    data: { token, name: "Browser test agent" },
+  });
+  expect(enrolled.status()).toBe(201);
+  const credential = await enrolled.json();
+  const replay = await page.request.post("/api/agent/v1/register", {
+    data: { token, name: "Replay" },
+  });
+  expect(replay.status()).toBe(401);
+  await page.getByRole("button", { name: "Hide key" }).click();
+  await expect(registration).not.toBeVisible();
+  const agentRow = page
+    .getByRole("row")
+    .filter({ hasText: "Browser test agent" });
+  await expect(agentRow).toBeVisible();
+  await expect(agentRow.getByText("Connected", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: resolve("../../artifacts/agents-settings.png"),
+    fullPage: true,
+  });
+  page.once("dialog", (dialog) => dialog.accept());
+  await agentRow.getByRole("button", { name: "Revoke access" }).click();
+  await expect(agentRow.getByText("Revoked", { exact: true })).toBeVisible();
+  const rejected = await page.request.post("/api/agent/v1/poll", {
+    headers: { Authorization: `Bearer ${credential.token}` },
+    data: {},
+  });
+  expect(rejected.status()).toBe(401);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({
     path: resolve("../../docs/screenshots/mobile.png"),

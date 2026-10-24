@@ -682,7 +682,7 @@ td button {
 }
 .tree-layout {
   display: grid;
-  grid-template-columns: minmax(310px, 40%) minmax(0, 60%);
+  grid-template-columns: minmax(420px, 1fr) minmax(0, 1.1fr);
   gap: 22px;
   align-items: start;
 }
@@ -1212,5 +1212,172 @@ dd {
   }
   .cert-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.history-tabs {
+  display: flex;
+  gap: 6px;
+}
+.history-server {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.history-server select {
+  max-width: min(260px, 65vw);
+}
+
+#history-jobs {
+  overflow-x: auto;
+}
+#history-jobs table {
+  min-width: 680px;
+}
+
+.bulk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  font-size: 11px;
+}
+.tree-row .tree-checkbox {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--brand, #18794e);
+  cursor: pointer;
+}
+.tree-row .node-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 65px;
+  flex: 1;
+}
+.tree-row:has(.expiry-meter) {
+  min-width: 510px;
+}
+.expiry-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 130px;
+  font-size: 11px;
+}
+.expiry-meter.compact {
+  width: 95px;
+  min-width: 95px;
+  flex-shrink: 0;
+  font-size: 9px;
+  margin-left: auto;
+}
+.expiry-meter small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.expiry-meter progress {
+  width: 100%;
+  max-width: 240px;
+  height: 5px;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--line);
+}
+.expiry-meter progress::-webkit-progress-bar {
+  background: var(--line);
+}
+.expiry-meter progress::-webkit-progress-value {
+  background: #248253;
+}
+.expiry-meter progress::-moz-progress-bar {
+  background: #248253;
+}
+.expiry-warning progress::-webkit-progress-value {
+  background: #a76b19;
+}
+.expiry-warning progress::-moz-progress-bar {
+  background: #a76b19;
+}
+.expiry-expired {
+  color: #ba504e;
+}
+.expiry-warning {
+  color: #a76b19;
+}
+.expiry-unknown,
+.expiry-not-deployed {
+  color: var(--muted);
+}
+.bulk-modal {
+  width: min(960px, 95vw);
+  max-width: 960px;
+}
+.bulk-content {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: 65vh;
+  font-size: 12px;
+}
+.bulk-table {
+  overflow: auto;
+  margin-top: 16px;
+}
+.bulk-table table {
+  min-width: 620px;
+}
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+}
+.status-Queued {
+  background: #eef1fc;
+  color: #697bc0;
+}
+
+.node-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+@media (max-width: 700px) {
+  .tree-row:has(.expiry-meter) {
+    min-width: 0;
+  }
+  .tree-row .node-name {
+    min-width: 0;
+  }
+  .tree-row:has(.expiry-meter) .node-name {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1px;
+  }
+  .node-name .expiry-meter.compact {
+    width: 100%;
+    min-width: 0;
+    gap: 0;
+    font-size: 8px;
+  }
+  .node-name .expiry-meter progress {
+    height: 3px;
   }
 }

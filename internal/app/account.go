@@ -53,14 +53,14 @@ func (a *App) password(w http.ResponseWriter, r *http.Request) {
 }
 func (a *App) cancelJob(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	res, e := a.Store.DB.Exec("UPDATE deployment_jobs SET status='Cancelled',stage='Cancelled by administrator',updated_at=? WHERE id=? AND status='Pending'", time.Now().UTC().Format(timestampFormat), id)
+	res, e := a.Store.DB.Exec("UPDATE deployment_jobs SET status='Cancelled',stage='Cancelled by administrator',updated_at=? WHERE id=? AND status IN ('Queued','Pending')", time.Now().UTC().Format(timestampFormat), id)
 	if e != nil {
 		problem(w, 500, "cancellation failed")
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n != 1 {
-		problem(w, 409, "only pending jobs can be cancelled")
+		problem(w, 409, "only queued or pending jobs can be cancelled")
 		return
 	}
 	a.Store.DB.Exec("UPDATE deployment_targets SET status='Unknown' WHERE id=(SELECT target_id FROM deployment_jobs WHERE id=?)", id)

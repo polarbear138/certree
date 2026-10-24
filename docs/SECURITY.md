@@ -1,5 +1,13 @@
 # Security design and deployment assumptions
 
+## Agent development preview
+
+Agents authenticate over validated HTTPS with separate per-agent random credentials; only hashes are stored centrally. Enrollment keys are single-use, valid for 15 minutes and scoped to one environment. Browser sessions cannot authorize agent protocol calls. Revocation rejects future calls but cannot revoke a task already downloaded or safely unlock an unresolved remote operation.
+
+Local root/agent-owned configuration determines allowed target paths and the fixed Nginx executable/arguments. Task messages cannot supply paths or shell commands. Symlink paths, unsafe ownership and writable shared non-sticky ancestors are rejected; private keys and credential files require restrictive permissions. Root/the agent user and the management host remain trusted. A compromised host can read private keys; disk encryption and backup retention remain operator responsibilities.
+
+The optional local GUI binds only loopback, checks its Host header and requires a separately generated local password. It is read-only and omits the agent credential. Use SSH forwarding rather than exposing its HTTP listener. See [AGENT.md](AGENT.md) for trust and recovery details.
+
 ## Protected assets
 
 Certificate private keys, SSH keys, mailbox credentials, administrator passwords, browser sessions, and deployment integrity are the primary assets. Secrets are excluded from inventory/list/detail responses and audit events. Remote Nginx command output is discarded because a server configuration can include credentials. Keys/passwords are not used as log fields.

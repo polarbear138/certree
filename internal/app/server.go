@@ -164,6 +164,7 @@ func actor(r *http.Request) string {
 }
 func (a *App) routes() {
 	m := a.mux
+	a.agentRoutes()
 	m.HandleFunc("GET /api/system/health", func(w http.ResponseWriter, r *http.Request) {
 		if a.Store.DB.PingContext(r.Context()) != nil {
 			problem(w, 503, "database unavailable")
@@ -173,6 +174,8 @@ func (a *App) routes() {
 	})
 	m.HandleFunc("POST /api/auth/login", a.login)
 	m.HandleFunc("POST /api/auth/password", a.protected(a.password))
+	m.HandleFunc("POST /api/deployments/bulk/preview", a.protected(a.bulkPreview))
+	m.HandleFunc("POST /api/deployments/bulk", a.protected(a.bulkEnqueue))
 	m.HandleFunc("POST /api/deployments/{id}/cancel", a.protected(a.cancelJob))
 	m.HandleFunc("GET /api/auth/me", a.protected(func(w http.ResponseWriter, r *http.Request) { response(w, 200, r.Context().Value(identityKey{})) }))
 	m.HandleFunc("POST /api/auth/logout", a.protected(func(w http.ResponseWriter, r *http.Request) {
@@ -190,10 +193,45 @@ func (a *App) routes() {
 	for endpoint, query := range map[string]string{"organizations": "SELECT * FROM organizations ORDER BY name", "environments": "SELECT * FROM environments ORDER BY name", "certificates": `SELECT c.*,v.id version_id,v.metadata,v.validation,v.approved,v.fingerprint,v.created_at FROM certificates c JOIN certificate_versions v ON v.id=(SELECT id FROM certificate_versions WHERE certificate_id=c.id ORDER BY created_at DESC LIMIT 1) ORDER BY c.name`, "servers": "SELECT id,name,config FROM servers ORDER BY name", "targets": "SELECT t.*,e.host,e.port,e.sni,e.server_id FROM deployment_targets t JOIN server_endpoints e ON e.id=t.endpoint_id", "deployments": "SELECT * FROM deployment_jobs ORDER BY created_at DESC LIMIT 200", "verifications": "SELECT * FROM verification_results ORDER BY created_at DESC LIMIT 200", "audit-logs": "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200", "collectors": "SELECT id,name,environment_id,config,last_poll,last_error FROM collectors ORDER BY name", "collector-events": "SELECT * FROM collector_events ORDER BY created_at DESC LIMIT 200"} {
 		q := query
 		m.HandleFunc("GET /api/"+endpoint, a.protected(func(w http.ResponseWriter, r *http.Request) {
-			rows, e := a.Store.Rows(q)
+			query := q
+			var args []any
+			if endpoint == "deployments" {
+				query = `SELECT j.*,s.name server_name,e.host,e.port,e.sni FROM deployment_jobs j JOIN servers s ON s.id=j.server_id JOIN deployment_targets t ON t.id=j.target_id JOIN server_endpoints e ON e.id=t.endpoint_id WHERE 1=1`
+				if server := r.URL.Query().Get("server_id"); server != "" {
+					query += " AND j.server_id=?"
+					args = append(args, server)
+				}
+				if kind := r.URL.Query().Get("kind"); kind != "" {
+					if kind != "Deployment" && kind != "Verification" {
+						problem(w, 400, "invalid job kind")
+						return
+					}
+					query += " AND j.kind=?"
+					args = append(args, kind)
+				}
+				query += " ORDER BY j.created_at DESC,j.id DESC LIMIT 200"
+			}
+			rows, e := a.Store.Rows(query, args...)
 			if e != nil {
 				problem(w, 500, "query failed")
 				return
+			}
+			if endpoint == "servers" {
+				targets, err := a.Store.Rows(`SELECT e.server_id,t.active_version,av.metadata active_metadata FROM deployment_targets t JOIN server_endpoints e ON e.id=t.endpoint_id LEFT JOIN certificate_versions av ON av.id=t.active_version`)
+				if err != nil {
+					problem(w, 500, "expiry query failed")
+					return
+				}
+				var days int
+				a.Store.DB.QueryRow("SELECT value FROM settings WHERE key='expiry_days'").Scan(&days)
+				summaries := summarizeExpiry(targets, days, time.Now())
+				for _, server := range rows {
+					expiry, ok := summaries[server["id"].(string)]
+					if !ok {
+						expiry = expiryInfo{State: "Not deployed", WarningDays: days}
+					}
+					server["expiry"] = expiry
+				}
 			}
 			response(w, 200, rows)
 		}))
@@ -476,6 +514,13 @@ func (a *App) testServer(w http.ResponseWriter, r *http.Request) {
 	}
 	t := Target{}
 	json.Unmarshal([]byte(c), &t.Server)
+	if t.Server.Type == "agent-nginx" {
+		var seen int64
+		var revoked int
+		a.Store.DB.QueryRow("SELECT last_seen,revoked FROM agents WHERE id=?", r.PathValue("id")).Scan(&seen, &revoked)
+		response(w, 200, map[string]any{"connected": revoked == 0 && seen > time.Now().Add(-90*time.Second).Unix(), "last_seen": seen, "transport": "agent"})
+		return
+	}
 	t.SSHKey, e = a.Store.Unseal(enc)
 	if e != nil {
 		problem(w, 500, "credential unavailable")
@@ -503,6 +548,12 @@ func (a *App) target(w http.ResponseWriter, r *http.Request) {
 		TargetConfig
 	}
 	if !decode(w, r, &b) {
+		return
+	}
+	var agentCount int
+	a.Store.DB.QueryRow("SELECT count(*) FROM agents WHERE id=?", b.ServerID).Scan(&agentCount)
+	if agentCount != 0 {
+		problem(w, 400, "configure agent targets locally using certree settings")
 		return
 	}
 	if !validHost(b.Host) || !validHost(b.SNI) || strings.Contains(b.SNI, "*") || b.Port < 1 || b.Port > 65535 {
@@ -595,6 +646,13 @@ func (a *App) enqueue(w http.ResponseWriter, r *http.Request) {
 	if e != nil {
 		problem(w, 404, "target not found")
 		return
+	}
+	if t.Server.Type == "agent-nginx" {
+		var revoked int
+		if e := a.Store.DB.QueryRow("SELECT a.revoked FROM agents a JOIN agent_targets t ON t.agent_id=a.id WHERE t.target_id=?", b.TargetID).Scan(&revoked); e != nil || revoked != 0 {
+			problem(w, 409, "agent is revoked or target is not registered")
+			return
+		}
 	}
 	var cid string
 	var approved int

@@ -1,4 +1,46 @@
-# Verification report — 2026-10-05 (Asia/Seoul)
+# Verification report
+
+## Current reading guide — 2026-10-24 (Asia/Seoul)
+
+This file retains historical checkpoints. A passing result describes the revision
+and scope at that checkpoint; it is not a blanket claim for all later source.
+No remote CI run or independent audit was verified as part of this documentation
+revision. The current application remains a candidate with outstanding release gates.
+
+| Area | Latest recorded evidence and limit |
+| --- | --- |
+| App backend | `go test ./internal/app` passed during the 2026-10-24 work; a later full-suite attempt was blocked by Windows Application Control |
+| Frontend and UI | 10 unit tests, production build and two isolated mocked-API browser flows passed at the tree/history checkpoint |
+| Installation updater | Six Python tests passed using mocked Docker calls; no live Linux update execution from the development workspace |
+| Static/API checks | `go vet ./...` and OpenAPI validation passed at the 2026-10-24 checkpoint |
+| Real deployment gates | Linux Nginx/systemd agent, Docker Nginx/OpenSSH/mail integration, Linux race and publication/security gates still need recorded evidence |
+| This documentation revision | Local Markdown link/anchor and documented-command consistency review; runtime behavior was not changed |
+
+For a release or support application, attach the actual public commit SHA and CI
+run links. Historical counts are not current repository-adoption metrics. See
+[TESTING.md](TESTING.md) for execution instructions.
+
+## Agent development preview — 2026-10-15 (Asia/Seoul)
+
+Implemented the outbound Linux agent, interactive CLI/commands, systemd worker and optional read-only GUI, central enrollment/revocation UI, scoped bearer API, durable deployment/result/recovery protocol, and additive schema version 2. The existing SSH transport remains supported.
+
+Executed successfully during this change:
+
+- Full `go test ./...` passed, including existing TLS, SSH and IMAP socket fixtures and the new real-HTTPS agent → local file replacement → central live TLS verification flow. The latter substitutes the Nginx command with a fixture that changes a real TLS listener's active certificate.
+- Focused final agent/CLI/GUI/protocol tests passed after recovery and security refinements: one-time/expired enrollment, environment and cross-agent isolation, revocation, durable replay, central restart, local recovery, central rollback, credential redaction, HTTPS trust/redirect refusal, and GUI authentication/Host/method checks.
+- `go vet ./...` passed. Linux amd64 agent and the Linux `agentintegration` test binary cross-compiled; Linux agent vet passed.
+- Frontend TypeScript/production build passed. Vitest: **7 passed**. Chromium administrator workflow: **1 passed**, extended to issue a registration key, enroll an agent, reject key reuse, display heartbeat status, hide the key, revoke access, and reject further polling. Mobile overflow check passed. Screenshots were refreshed from the isolated test application; `artifacts/agents-settings.png` records the new panel.
+- OpenAPI 3.1 validated with **36 paths**, including agent bearer security and protocol schemas. The CLI executable's help output was exercised locally.
+
+Initial sandboxed runs encountered denied loopback connections, temporary-file rename restrictions and a frontend temporary-cache error. Re-running with normal local execution permissions succeeded. These earlier sandbox failures are not counted as passing evidence.
+
+Still unverified on this machine: **real Linux Nginx agent integration, actual systemd installation/service execution, Linux race checks and the existing Docker Nginx/OpenSSH/mail suite**. Docker is unavailable and no usable WSL distribution is configured. CI now includes `go test -tags=agentintegration -v ./internal/agent` against installed Nginx, but no remote CI success is claimed. No production server, installation or release was changed. Run these platform gates before production use.
+
+The older report below is historical; its final-backend/browser-rerun limitation is superseded by the successful tests above, while its unexecuted Docker and publication/security gates remain outstanding.
+
+---
+
+## Original candidate report — 2026-10-05 (Asia/Seoul)
 
 ## Status
 
@@ -49,3 +91,19 @@ The security model trusts administrators and the management host. v0.1 has no RB
 ## Next development priorities
 
 First complete the release gates and obtain an independent security review. Next add safe inventory/collector editing, secret rotation, retention policies, IMAP pagination, and multiple verification vantage points. Additional web-server adapters should follow only with equivalent real integration coverage.
+
+## Tree bulk deployment, expiry and update profiles (2026-10-24)
+
+- Added backend tests for explicit reviewed versions, approval revalidation,
+  duplicate target admission, same-server queue exclusion/FIFO, cancellation,
+  and expiry calculated from applied rather than newly uploaded versions.
+- `go test ./internal/app` passed in the Windows environment with local socket
+  access enabled. A subsequent full `go test ./...` run compiled packages but
+  Windows Application Control blocked agent/app test executables; it did not
+  complete and is not a substitute for the Linux Nginx integration gate.
+- `go vet ./...` passed. Frontend unit tests (10), production build, and the
+  isolated History/Tree browser tests (2, using mocked API responses) passed.
+- Update profile tests (6) cover preserving project/database/key/trust/host values,
+  literal dollar signs in stored config, missing-volume refusal, key conflicts,
+  build failure before replacement, and refusing Git pulls over tracked edits.
+  These mock Docker calls; a live Linux update was not executed from this workspace.

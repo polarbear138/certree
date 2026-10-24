@@ -1,5 +1,13 @@
 # Architecture
 
+## Agent transport extension
+
+The central application now also serves `/api/agent/v1`. Linux agents poll outbound HTTPS using individual bearer credentials provisioned with single-use, environment-scoped registration keys. `agents`, `agent_enrollment`, `agent_targets` and `agent_tasks` are additive schema version 2 tables. Existing SSH servers and jobs are unchanged.
+
+Agent targets reuse servers/endpoints/deployment_targets and the per-server active job index. SSH workers exclude agent Deployment jobs but continue independent Verification jobs. Agent tasks progress through `deploy → verify-deploy → done`, or `rollback → verify-rollback → done` after a failed deployment/central verification. The persisted task phase and local backup journal survive central/client restarts. Agent completion cannot set Success: the central worker verifies trusted live TLS first.
+
+Destination paths and Nginx commands are local policy; task payloads contain only a target ID and certificate material. The optional loopback GUI is a separate read-only process. See [AGENT.md](AGENT.md) for configuration, trust, interruption and revocation semantics.
+
 ## Domain and storage
 
 `organizations → environments → certificates → certificate_versions` establishes inventory scope. Certificate identity uses the environment and sorted SAN set; renewals retain the same certificate entity and create immutable version rows. The SHA-256 fingerprint deduplicates versions within that entity. Encrypted key material and PEM chains live in separate version-linked tables.
@@ -44,3 +52,13 @@ Stable IDs derive from entity IDs (`organization:…`, `environment:…`, `certi
 The server constructs the tree in linear passes over its tables. The React tree flattens expanded nodes and renders at most roughly 30 rows around its scroll viewport. Search keeps ancestors; status filtering removes nonmatching leaves. Arrow keys, Home/End, Enter/Space, `aria-level`, selected/expanded state, and visible labels support keyboard/assistive interaction. Expansion and theme preferences persist locally; secrets do not.
 
 TanStack Query polls tree data every three seconds and lists every five seconds. Mutations invalidate affected cached data. Certificate details support version selection, comparisons, approval, per-target deployment, verification, and history. Higher tree levels offer read-only previews.
+
+## Reviewed bulk deployment and applied expiry
+
+Bulk preview resolves explicit approved version IDs for selected targets. Submission
+rechecks each reviewed version and returns per-target results. Durable `Queued` jobs
+are covered by the target uniqueness index; promotion admits only the oldest waiting
+job per free server into the existing Pending/Running/Recovering server exclusion.
+Both SSH and agent workers retain their usual validation and verification paths.
+Target expiry metadata is derived from `active_version`; server summaries aggregate
+the earliest known applied expiry and retain unknown/undeployed counts.

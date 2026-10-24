@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Certree API",
-    "version": "0.1.0",
-    "description": "Administrator-only API. JSON metadata fields in SQL lists are serialized JSON strings; tree data is expanded. Uploaded trust roots do not grant issuer trust. All state changes require matching Origin and session CSRF header."
+    "version": "0.2.0-dev",
+    "description": "Browser administrator API uses sessions, Origin and CSRF. Agent v1 uses per-agent bearer credentials over HTTPS; enrollment uses a single-use 15-minute key scoped to an environment. Agent reload reports never imply successful deployment until central live TLS verification."
   },
   "servers": [
     {
@@ -1023,7 +1023,7 @@
     },
     "/deployments": {
       "get": {
-        "summary": "Latest 200 persistent jobs",
+        "summary": "Latest 200 jobs filtered by server and kind",
         "operationId": "get__deployments",
         "responses": {
           "200": {
@@ -1046,7 +1046,27 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "server_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Deployment",
+                "Verification"
+              ]
+            }
+          }
+        ]
       },
       "post": {
         "summary": "Explicitly approve and queue target operation",
@@ -1104,6 +1124,120 @@
         }
       }
     },
+    "/deployments/bulk/preview": {
+      "post": {
+        "summary": "Review up to 200 targets using explicit approved certificate versions",
+        "operationId": "post__deployments_bulk_preview",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkPreview"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deployments/bulk": {
+      "post": {
+        "summary": "Queue reviewed versions with per-target results and server serialization",
+        "operationId": "post__deployments_bulk",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/deployments/{id}": {
       "get": {
         "summary": "Job, stage events, and TLS evidence",
@@ -1144,7 +1278,7 @@
     },
     "/deployments/{id}/cancel": {
       "post": {
-        "summary": "Cancel a Pending job only",
+        "summary": "Cancel a Queued or Pending job only",
         "operationId": "post__deployments_id_cancel",
         "responses": {
           "200": {
@@ -1473,6 +1607,395 @@
           }
         }
       }
+    },
+    "/agents": {
+      "get": {
+        "summary": "List agents without credentials",
+        "operationId": "get__agents",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/enrollment": {
+      "post": {
+        "summary": "Create a single-use environment-scoped registration key",
+        "operationId": "post__agents_enrollment",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentEnrollment"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{id}/revoke": {
+      "post": {
+        "summary": "Reject subsequent agent requests; in-flight local work may still complete",
+        "operationId": "post__agents_id_revoke",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Must equal CERTREE_ORIGIN"
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/agent/v1/register": {
+      "post": {
+        "summary": "Consume registration key and return agent credentials",
+        "operationId": "post__agent_v1_register",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCredentials"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRegistration"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/v1/inventory": {
+      "get": {
+        "summary": "Public certificate choices in assigned environment",
+        "operationId": "get__agent_v1_inventory",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent": []
+          }
+        ],
+        "parameters": []
+      }
+    },
+    "/agent/v1/targets": {
+      "post": {
+        "summary": "Register immutable locally configured target; repeated identical requests return 200",
+        "operationId": "post__agent_v1_targets",
+        "responses": {
+          "201": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ID"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "agent": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentTarget"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/v1/poll": {
+      "post": {
+        "summary": "Heartbeat and fetch current deploy or rollback task; repeats until result is durable",
+        "operationId": "post__agent_v1_poll",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentPoll"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [],
+        "security": [
+          {
+            "agent": []
+          }
+        ]
+      }
+    },
+    "/agent/v1/jobs/{id}/result": {
+      "post": {
+        "summary": "Persist idempotent result for central verification",
+        "operationId": "post__agent_v1_jobs_id_result",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {
+            "agent": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentResult"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/v1/history": {
+      "get": {
+        "summary": "Latest 100 jobs for this agent",
+        "operationId": "get__agent_v1_history",
+        "responses": {
+          "200": {
+            "description": "Successful request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Rejected request; 400 invalid input, 401 session required, 403 CSRF/Origin denied, 404 absent entity, 409 active job/conflict, 422 failed validation, 429 login limit, 500 internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "agent": []
+          }
+        ],
+        "parameters": []
+      }
     }
   },
   "components": {
@@ -1481,6 +2004,10 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "certree_session"
+      },
+      "agent": {
+        "type": "http",
+        "scheme": "bearer"
       }
     },
     "schemas": {
@@ -1704,6 +2231,54 @@
           }
         }
       },
+      "BulkPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_ids"
+        ],
+        "properties": {
+          "target_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BulkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "target_id",
+                "version_id"
+              ],
+              "properties": {
+                "target_id": {
+                  "type": "string"
+                },
+                "version_id": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "Settings": {
         "type": "object",
         "additionalProperties": false,
@@ -1881,6 +2456,173 @@
       },
       "Detail": {
         "type": "object"
+      },
+      "AgentEnrollment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environment_id"
+        ],
+        "properties": {
+          "environment_id": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentRegistration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "name"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64,
+            "writeOnly": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        }
+      },
+      "AgentCredentials": {
+        "type": "object",
+        "required": [
+          "id",
+          "token"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Secret returned once; store locally with restricted permissions"
+          }
+        }
+      },
+      "AgentTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "certificate_id",
+          "type",
+          "certificate_path",
+          "key_path",
+          "configuration_path",
+          "host",
+          "port",
+          "sni"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "type": "string"
+          },
+          "type": {
+            "const": "nginx"
+          },
+          "certificate_path": {
+            "type": "string"
+          },
+          "key_path": {
+            "type": "string"
+          },
+          "configuration_path": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        }
+      },
+      "AgentResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "outcome"
+        ],
+        "properties": {
+          "phase": {
+            "enum": [
+              "deploy",
+              "rollback"
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "Reloaded",
+              "Rolled Back",
+              "Failed",
+              "Recovery Failed"
+            ]
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        }
+      },
+      "AgentTask": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "key_pem": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentPoll": {
+        "type": "object",
+        "required": [
+          "task"
+        ],
+        "properties": {
+          "task": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentTask"
+              }
+            ]
+          }
+        }
       }
     }
   }

@@ -7,7 +7,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { BrowserRouter, NavLink, useLocation } from "react-router-dom";
+import {
+  BrowserRouter,
+  NavLink,
+  useLocation,
+  useSearchParams,
+} from "react-router-dom";
 import {
   TreePine,
   LayoutDashboard,
@@ -15,6 +20,7 @@ import {
   ShieldCheck,
   Server,
   Rocket,
+  History as HistoryIcon,
   Inbox,
   Settings,
   Search,
@@ -49,6 +55,13 @@ import {
   unpack,
 } from "./api";
 import "./styles.css";
+import { AgentsPanel } from "./AgentsPanel";
+import {
+  BulkDeployDialog,
+  ExpiryBar,
+  SelectionCheckbox,
+  targetIDs,
+} from "./TreeOperations";
 export const qc = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: true } },
 });
@@ -60,6 +73,8 @@ const statusIcons: Record<string, React.ElementType> = {
   "Recovery Failed": XCircle,
   "Rolled Back": AlertTriangle,
   Pending: Clock,
+  Queued: Clock,
+  Cancelled: XCircle,
   Deploying: Loader2,
   Running: Loader2,
   Unknown: HelpCircle,
@@ -288,7 +303,7 @@ const nav = [
   ["/tree", "Tree Explorer", Network],
   ["/certificates", "Certificates", ShieldCheck],
   ["/servers", "Servers", Server],
-  ["/deployments", "Deployments", Rocket],
+  ["/history", "History", HistoryIcon],
   ["/collectors", "Collectors", Inbox],
   ["/settings", "Settings", Settings],
 ] as const;
@@ -335,7 +350,9 @@ export function App() {
         }}
       />
     );
-  const page = nav.find((n) => n[0] === location.pathname)?.[1] || "Overview";
+  const page =
+    nav.find((n) => n[0] === location.pathname)?.[1] ||
+    (location.pathname === "/deployments" ? "History" : "Overview");
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -432,8 +449,8 @@ export function App() {
             <Certificates />
           ) : location.pathname === "/servers" ? (
             <Servers />
-          ) : location.pathname === "/deployments" ? (
-            <Deployments />
+          ) : ["/history", "/deployments"].includes(location.pathname) ? (
+            <HistoryPage />
           ) : location.pathname === "/collectors" ? (
             <Collectors />
           ) : location.pathname === "/settings" ? (
@@ -540,8 +557,8 @@ function Overview() {
       <div className="overview-grid">
         <section className="panel">
           <div className="panel-title">
-            <h2>Recent deployments</h2>
-            <NavLink to="/deployments">
+            <h2>Recent history</h2>
+            <NavLink to="/history">
               View all <ArrowUpRight size={14} />
             </NavLink>
           </div>
@@ -610,6 +627,8 @@ export function TreeExplorer() {
     queryFn: () => api<TreeNode>("tree"),
     refetchInterval: 3000,
   });
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<string[] | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [selected, setSelected] = useState("root");
@@ -631,6 +650,22 @@ export function TreeExplorer() {
     ? flatten(filtered, search || status ? allExpanded : expanded)
     : [];
   const current = tree ? findNode(tree, selected) : undefined;
+  const matchingTargets = filtered ? targetIDs(filtered) : [];
+  function toggleTargets(ids: string[]) {
+    setChecked((previous) => {
+      const next = new Set(previous);
+      const remove = ids.every((id) => next.has(id));
+      ids.forEach((id) => (remove ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  }
+  useEffect(() => {
+    if (!tree) return;
+    const existing = new Set(targetIDs(tree));
+    setChecked(
+      (previous) => new Set([...previous].filter((id) => existing.has(id))),
+    );
+  }, [tree]);
   const [scroll, setScroll] = useState(0);
   const viewport = useRef<HTMLDivElement>(null);
   const toggle = (id: string) => {
@@ -695,7 +730,55 @@ export function TreeExplorer() {
           Updates every 3s
         </span>
       </div>
+      <div className="bulk-toolbar">
+        <button
+          disabled={!matchingTargets.length}
+          onClick={() => toggleTargets(matchingTargets)}
+        >
+          {matchingTargets.length > 0 &&
+          matchingTargets.every((id) => checked.has(id))
+            ? "Deselect matching targets"
+            : "Select matching targets"}
+        </button>
+        <span>
+          {checked.size} targets selected
+          {checked.size > matchingTargets.filter((id) => checked.has(id)).length
+            ? " (includes targets outside current filter)"
+            : ""}
+        </span>
+        {checked.size > 0 && (
+          <>
+            <button onClick={() => setChecked(new Set())}>
+              Clear selection
+            </button>
+            <button
+              className="primary"
+              disabled={checked.size > 200}
+              onClick={() => setBulk([...checked].sort())}
+            >
+              <Rocket size={14} /> Review deployment ({checked.size})
+            </button>
+          </>
+        )}
+        {checked.size > 200 && (
+          <span className="error-text">
+            Select up to 200 targets per batch.
+          </span>
+        )}
+      </div>
       <Notice error={query.error} />
+      {bulk && (
+        <BulkDeployDialog
+          ids={bulk}
+          onClose={() => setBulk(null)}
+          onQueued={(ids) =>
+            setChecked(
+              (previous) =>
+                new Set([...previous].filter((id) => !ids.includes(id))),
+            )
+          }
+        />
+      )}
       {query.isPending ? (
         <div className="loading">Loading relationships…</div>
       ) : (
@@ -709,6 +792,7 @@ export function TreeExplorer() {
               className="tree-viewport"
               role="tree"
               aria-label="Certificate infrastructure"
+              aria-multiselectable="true"
               ref={viewport}
               onScroll={(e) => setScroll(e.currentTarget.scrollTop)}
               style={{ height: 540 }}
@@ -723,6 +807,10 @@ export function TreeExplorer() {
                     .slice(start, end)
                     .map(({ node: n, depth }, index) => {
                       const i = start + index;
+                      const selectable = targetIDs(n);
+                      const selectedCount = selectable.filter((id) =>
+                        checked.has(id),
+                      ).length;
                       const Icon =
                         n.type === "certificate"
                           ? ShieldCheck
@@ -739,6 +827,15 @@ export function TreeExplorer() {
                           role="treeitem"
                           aria-level={depth}
                           aria-selected={n.id === selected}
+                          aria-checked={
+                            selectable.length
+                              ? selectedCount === selectable.length
+                                ? true
+                                : selectedCount
+                                  ? "mixed"
+                                  : false
+                              : undefined
+                          }
                           aria-expanded={
                             n.children.length ? expanded.has(n.id) : undefined
                           }
@@ -780,7 +877,9 @@ export function TreeExplorer() {
                                   }
                                 }
                               }
-                            } else if (e.key === "Enter" || e.key === " ") {
+                            } else if (e.key === " ") {
+                              toggleTargets(selectable);
+                            } else if (e.key === "Enter") {
                               toggle(n.id);
                             } else return;
                             e.preventDefault();
@@ -824,9 +923,20 @@ export function TreeExplorer() {
                               <span />
                             )}
                           </button>
+                          {selectable.length > 0 && (
+                            <SelectionCheckbox
+                              ids={selectable}
+                              selected={checked}
+                              label={`Select ${n.name}`}
+                              onToggle={toggleTargets}
+                            />
+                          )}
                           <Icon size={17} />
                           <span className="node-name" title={n.name}>
-                            {n.name}
+                            <span className="node-label">{n.name}</span>
+                            {n.type === "target" && (
+                              <ExpiryBar value={n.data?.expiry} compact />
+                            )}
                           </span>
                           {n.children.length > 0 && (
                             <small className="child-count">
@@ -943,6 +1053,22 @@ function NodeDetails({ node: n }: { node: TreeNode }) {
         <Status value={n.status} />
       </div>
       <Notice error={m.error || cert.error || targetCert.error} />
+      {n.type === "target" && (
+        <div className="detail-section">
+          <h3>Applied certificate lifetime</h3>
+          <ExpiryBar value={n.data?.expiry} />
+          <p className="subtle">
+            Based on the last successfully verified applied version.
+          </p>
+          <h3>Server · {n.data?.server_name}</h3>
+          <ExpiryBar value={n.data?.server_expiry} summary />
+          <NavLink
+            to={`/history?server_id=${encodeURIComponent(n.data?.server_id || "")}`}
+          >
+            View server history
+          </NavLink>
+        </div>
+      )}
       {m.isSuccess && (
         <div className="notice">
           Request saved. Live status will refresh automatically.
@@ -1195,7 +1321,7 @@ function NodeDetails({ node: n }: { node: TreeNode }) {
             </>
           )}
           <div className="detail-section">
-            <h3>Deployment history</h3>
+            <h3>Operation history</h3>
             <JobTable rows={relatedJobs.slice(0, 8)} />
           </div>
         </>
@@ -1215,12 +1341,13 @@ function NodeDetails({ node: n }: { node: TreeNode }) {
           <div className="detail-section">
             <h3>Deployment preview</h3>
             <p>
-              {n.children.length} immediate child nodes. Select a certificate or
-              endpoint to review and approve an individual deployment.
+              {n.children.length} immediate child nodes. Select a certificate to
+              review its versions, or choose deployment targets using the
+              checkboxes.
             </p>
             <p className="subtle">
-              Organization and environment deployment previews are read only in
-              v0.1.
+              Use the tree checkboxes to select descendant targets and review a
+              bulk deployment.
             </p>
             <ul className="plain-list">
               {n.children.map((c) => (
@@ -1367,7 +1494,13 @@ function Servers() {
     },
   ];
   const targetFields: Field[] = [
-    { key: "server_id", label: "Server", options: (rows.data as any) || [] },
+    {
+      key: "server_id",
+      label: "SSH server",
+      options: (rows.data || []).filter(
+        (s) => unpack(s.config).type !== "agent-nginx",
+      ) as any,
+    },
     {
       key: "certificate_id",
       label: "Certificate",
@@ -1412,7 +1545,7 @@ function Servers() {
       <Heading
         eyebrow="DEPLOYMENT INVENTORY"
         title="Servers & endpoints"
-        description="Pinned SSH identities and independent TLS verification endpoints."
+        description="SSH servers, outbound client agents, and independent TLS verification endpoints. Configure agent targets using certree settings."
       >
         <button onClick={() => setModal("target")}>
           <Plus size={16} />
@@ -1426,8 +1559,11 @@ function Servers() {
       <Notice error={rows.error || m.error} />
       {m.isSuccess && (
         <div className="notice">
-          SSH authentication, host key verification and SFTP connection
-          succeeded.
+          {m.data?.transport === "agent"
+            ? m.data.connected
+              ? "Agent heartbeat is current."
+              : "Agent is offline or revoked."
+            : "SSH authentication, host key verification and SFTP connection succeeded."}
         </div>
       )}
       <section className="panel">
@@ -1442,9 +1578,10 @@ function Servers() {
             <thead>
               <tr>
                 <th>Server</th>
-                <th>SSH address</th>
+                <th>Connection</th>
                 <th>User</th>
                 <th>Host identity</th>
+                <th>Certificate expiry</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -1458,12 +1595,21 @@ function Servers() {
                       <small>Nginx</small>
                     </td>
                     <td>
-                      {c.host}:{c.port}
+                      {c.type === "agent-nginx"
+                        ? "Outbound HTTPS agent"
+                        : `${c.host}:${c.port}`}
                     </td>
-                    <td>{c.user}</td>
+                    <td>
+                      {c.type === "agent-nginx" ? "Local service" : c.user}
+                    </td>
                     <td>
                       <ShieldCheck size={15} />
-                      Pinned key
+                      {c.type === "agent-nginx"
+                        ? "Agent credential"
+                        : "Pinned key"}
+                    </td>
+                    <td>
+                      <ExpiryBar value={s.expiry} summary />
                     </td>
                     <td>
                       <button
@@ -1473,6 +1619,13 @@ function Servers() {
                         <Network size={14} />
                         Test connection
                       </button>
+                      <NavLink
+                        className="button"
+                        to={`/history?server_id=${encodeURIComponent(s.id)}`}
+                      >
+                        <HistoryIcon size={14} />
+                        History
+                      </NavLink>
                     </td>
                   </tr>
                 );
@@ -1541,15 +1694,18 @@ function Servers() {
 function JobTable({
   rows,
   onSelect,
+  emptyKind,
 }: {
   rows: Row[];
   onSelect?: (id: string) => void;
+  emptyKind?: string;
 }) {
   return rows.length ? (
     <table>
       <thead>
         <tr>
           <th>Job</th>
+          <th>Server / endpoint</th>
           <th>Status</th>
           <th>Stage</th>
           <th>Created</th>
@@ -1572,30 +1728,62 @@ function JobTable({
               <small>{j.kind}</small>
             </td>
             <td>
+              <strong>{j.server_name || j.server_id}</strong>
+              <small>
+                {j.sni || j.host || "—"}
+                {j.port ? `:${j.port}` : ""}
+              </small>
+            </td>
+            <td>
               <Status value={j.status} />
             </td>
             <td>
               {j.stage}
               <small className="error-text">{j.error}</small>
             </td>
-            <td>{date(j.created_at)}</td>
+            <td>
+              {j.created_at ? new Date(j.created_at).toLocaleString() : "—"}
+            </td>
           </tr>
         ))}
       </tbody>
     </table>
   ) : (
-    <Empty title="No deployments yet">
-      Approve a certificate version and deploy it from Tree Explorer.
+    <Empty
+      title={
+        emptyKind ? `No ${emptyKind.toLowerCase()} history` : "No history yet"
+      }
+    >
+      {emptyKind === "Verification"
+        ? "Live TLS checks will appear here for the selected server. Active certificates are checked every 5 minutes."
+        : "Deployment and verification jobs will appear here once requested."}
     </Empty>
   );
 }
-function Deployments() {
-  const rows = useRows("deployments");
+export function HistoryPage() {
+  const [params, setParams] = useSearchParams();
+  const kind =
+    params.get("tab") === "deployments" ? "Deployment" : "Verification";
+  const server = params.get("server_id") || "";
+  const servers = useRows("servers");
+  const query = new URLSearchParams({ kind });
+  if (server) query.set("server_id", server);
+  const rows = useRows("deployments?" + query);
+  function changeFilter(key: string, value: string) {
+    setSelected("");
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    });
+  }
   const cancellation = useMutation({
     mutationFn: (id: string) => api("deployments/" + id + "/cancel", {}),
     onSuccess: () => qc.invalidateQueries(),
   });
   const [selected, setSelected] = useState("");
+  useEffect(() => setSelected(""), [kind, server]);
   const detail = useQuery({
     queryKey: ["job", selected],
     queryFn: () => api("deployments/" + selected),
@@ -1606,29 +1794,101 @@ function Deployments() {
     <>
       <Heading
         eyebrow="AUDITABLE OPERATIONS"
-        title="Deployments"
-        description="Persistent jobs, live verification, and recovery outcomes."
+        title="History"
+        description="Review deployment and live TLS verification history by server."
       >
         <button onClick={() => qc.invalidateQueries()}>
           <RefreshCw size={16} />
           Refresh
         </button>
       </Heading>
-      <Notice error={rows.error || detail.error || cancellation.error} />
-      <section className="panel">
-        <JobTable rows={rows.data || []} onSelect={setSelected} />
+      <Notice
+        error={
+          rows.error || servers.error || detail.error || cancellation.error
+        }
+      />
+      <div className="history-toolbar">
+        <div className="history-tabs" role="tablist" aria-label="History type">
+          {(["Verification", "Deployment"] as const).map((tab) => (
+            <button
+              key={tab}
+              role="tab"
+              id={`history-tab-${tab}`}
+              aria-selected={kind === tab}
+              aria-controls="history-jobs"
+              tabIndex={kind === tab ? 0 : -1}
+              onKeyDown={(e) => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key))
+                  return;
+                e.preventDefault();
+                const next =
+                  e.key === "Home"
+                    ? "Verification"
+                    : e.key === "End"
+                      ? "Deployment"
+                      : kind === "Verification"
+                        ? "Deployment"
+                        : "Verification";
+                changeFilter("tab", next === "Deployment" ? "deployments" : "");
+                document.getElementById(`history-tab-${next}`)?.focus();
+              }}
+              className={kind === tab ? "primary" : ""}
+              onClick={() =>
+                changeFilter("tab", tab === "Deployment" ? "deployments" : "")
+              }
+            >
+              {tab === "Deployment" ? "Deployments" : tab}
+            </button>
+          ))}
+        </div>
+        <label className="history-server">
+          Server
+          <select
+            value={server}
+            onChange={(e) => changeFilter("server_id", e.target.value)}
+          >
+            <option value="">All servers</option>
+            {(servers.data || []).map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="subtle">
+          Latest {rows.data?.length || 0} jobs · Up to 200 per selection
+        </span>
+      </div>
+      <section
+        className="panel"
+        role="tabpanel"
+        id="history-jobs"
+        tabIndex={0}
+        aria-labelledby={`history-tab-${kind}`}
+      >
+        {rows.isPending ? (
+          <p role="status">Loading history…</p>
+        ) : (
+          <JobTable
+            rows={rows.data || []}
+            onSelect={setSelected}
+            emptyKind={kind}
+          />
+        )}
       </section>
       {detail.data && (
         <section className="panel">
           <div className="panel-title">
-            <h2>Job {selected.slice(0, 12)}</h2>
+            <h2>
+              {detail.data.job.kind} job {selected.slice(0, 12)}
+            </h2>
             <Status value={detail.data.job.status} />
-            {detail.data.job.status === "Pending" && (
+            {["Queued", "Pending"].includes(detail.data.job.status) && (
               <button
                 disabled={cancellation.isPending}
                 onClick={() => cancellation.mutate(selected)}
               >
-                Cancel pending job
+                Cancel queued job
               </button>
             )}
           </div>
@@ -1829,6 +2089,7 @@ function SettingsPage() {
         title="Settings"
         description="Lifecycle thresholds, security posture, and audit history."
       />
+      <AgentsPanel />
       <section className="panel settings-panel">
         <h2>Certificate expiration warning</h2>
         <p>Mark certificates with a warning before they expire.</p>

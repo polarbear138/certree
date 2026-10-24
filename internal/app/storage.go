@@ -71,7 +71,7 @@ func Open(path, key string) (*Store, error) {
 		db.Close()
 		return nil, e
 	}
-	_, e = tx.Exec(schema)
+	_, e = tx.Exec(schema + agentSchema)
 	if e == nil {
 		e = tx.Commit()
 	} else {
@@ -173,7 +173,8 @@ CREATE TABLE IF NOT EXISTS servers(id TEXT PRIMARY KEY,name TEXT NOT NULL,config
 CREATE TABLE IF NOT EXISTS server_endpoints(id TEXT PRIMARY KEY,server_id TEXT NOT NULL REFERENCES servers(id),host TEXT NOT NULL,port INTEGER NOT NULL,sni TEXT NOT NULL,UNIQUE(server_id,host,port,sni));
 CREATE TABLE IF NOT EXISTS deployment_targets(id TEXT PRIMARY KEY,endpoint_id TEXT NOT NULL REFERENCES server_endpoints(id),certificate_id TEXT NOT NULL REFERENCES certificates(id),config TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'Unknown',deployment_status TEXT NOT NULL DEFAULT 'Unknown',verification_status TEXT NOT NULL DEFAULT 'Unknown',active_version TEXT,UNIQUE(endpoint_id,certificate_id));
 CREATE TABLE IF NOT EXISTS deployment_jobs(id TEXT PRIMARY KEY,target_id TEXT NOT NULL REFERENCES deployment_targets(id),server_id TEXT NOT NULL REFERENCES servers(id),version_id TEXT NOT NULL REFERENCES certificate_versions(id),kind TEXT NOT NULL,status TEXT NOT NULL,stage TEXT NOT NULL DEFAULT 'Queued',error TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,attempt INTEGER NOT NULL DEFAULT 0,next_run INTEGER NOT NULL DEFAULT 0);
-CREATE UNIQUE INDEX IF NOT EXISTS active_target_job ON deployment_jobs(target_id) WHERE status IN ('Pending','Running','Recovering');
+DROP INDEX IF EXISTS active_target_job;
+CREATE UNIQUE INDEX active_target_job ON deployment_jobs(target_id) WHERE status IN ('Queued','Pending','Running','Recovering');
 CREATE UNIQUE INDEX IF NOT EXISTS active_server_job ON deployment_jobs(server_id) WHERE status IN ('Pending','Running','Recovering');
 CREATE TABLE IF NOT EXISTS deployment_results(id TEXT PRIMARY KEY,job_id TEXT REFERENCES deployment_jobs(id),outcome TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS verification_results(id TEXT PRIMARY KEY,target_id TEXT REFERENCES deployment_targets(id),job_id TEXT REFERENCES deployment_jobs(id),expected TEXT NOT NULL,actual TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
