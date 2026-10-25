@@ -97,8 +97,10 @@ restarted DB through the parent lifecycle test, and report helper failures on th
 correct subtest. The workflow also adds the missing production-image probe,
 maintained action runtimes, independent named steps and reliable diagnostics.
 
-Local actionlint, web checks/audit and Git-history secret scan passed during the
-review. Linux race, real Nginx and Docker execution require the corresponding
-remote run; see [VERIFICATION.md](VERIFICATION.md) for the latest observed outcome.
-No failed or unexecuted gate should be represented as green solely because this
-workflow file exists.
+The corrected source `b55fb747d7f291dc7b1b06fc408f51fa7f68a63e` passed all five jobs in
+[GitHub Actions run 40154857361](https://github.com/polarbear138/certree/actions/runs/40154857361)
+on 2026-10-25. This includes Linux race tests, real Nginx agent deployment/rollback,
+production image build/healthcheck, Docker Nginx/OpenSSH/SMTP/IMAP lifecycle, web
+browser workflows, dependency scans and secret scanning. See
+[VERIFICATION.md](VERIFICATION.md) for scope and remaining systemd/release limits.
+This validates a disposable CI environment, not an operator's production fleet.
