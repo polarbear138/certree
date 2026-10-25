@@ -200,6 +200,7 @@ these documents.
 | Permissions, backups and recovery | [Operations](docs/OPERATIONS.md) |
 | Security assumptions and private reporting | [Security policy](SECURITY.md) · [Threat model](docs/SECURITY.md) |
 | Test commands and observed results | [Testing](docs/TESTING.md) · [Verification](docs/VERIFICATION.md) |
+| Self-hosted CI checks and publishing scope | [CI/CD](docs/CI_CD.md) |
 | Maintainer workflows and release gates | [Maintaining](docs/MAINTAINING.md) · [Changelog](CHANGELOG.md) |
 
 ## License

@@ -24,7 +24,7 @@ The web runtime dependencies declare MIT or ISC licenses. The Go runtime/module 
 | modernc.org/memory | v1.12.1 | See source notices | [LICENSE](licenses/go-modernc.org_memory-LICENSE.txt), [LICENSE-GO](licenses/go-modernc.org_memory-LICENSE-GO.txt), [LICENSE-LOGO](licenses/go-modernc.org_memory-LICENSE-LOGO.txt), [LICENSE-MMAP-GO](licenses/go-modernc.org_memory-LICENSE-MMAP-GO.txt) |
 | modernc.org/sqlite | v1.60.1 | See source notices | [LICENSE](licenses/go-modernc.org_sqlite-LICENSE.txt), [LICENSE-3RD-PARTY.md](licenses/go-modernc.org_sqlite-LICENSE-3RD-PARTY.md.txt), [LICENSE-SQLITE](licenses/go-modernc.org_sqlite-LICENSE-SQLITE.txt), [LICENSE-SQLITE_VEC](licenses/go-modernc.org_sqlite-LICENSE-SQLITE_VEC.txt) |
 | software.sslmate.com/src/go-pkcs12 | v0.7.3 | See source notices | [LICENSE](licenses/go-software.sslmate.com_src_go-pkcs12-LICENSE.txt) |
-| Go runtime | go version go1.27.1 windows/amd64 | BSD-3-Clause | [LICENSE](licenses/go-Go_runtime-LICENSE.txt) |
+| Go runtime | go version go1.27.3 windows/amd64 | BSD-3-Clause | [LICENSE](licenses/go-Go_runtime-LICENSE.txt) |
 | @tanstack/query-core | 5.104.1 | MIT | [LICENSE](licenses/npm-_tanstack_query-core-LICENSE.txt) |
 | @tanstack/react-query | 5.104.1 | MIT | [LICENSE](licenses/npm-_tanstack_react-query-LICENSE.txt) |
 | cookie | 1.1.1 | MIT | [LICENSE](licenses/npm-cookie-LICENSE.txt) |

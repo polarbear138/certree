@@ -1,56 +1,156 @@
 name: CI
-on: [push, pull_request]
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  workflow-lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate GitHub Actions workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: {go-version: '1.27.1', cache: true}
-      - run: test -z "$(gofmt -l apps/server cmd internal)"
-      - run: go vet ./...
-      - run: go test -race -coverprofile=coverage.out ./...
-      - run: go build ./apps/server
-      - run: go build -o certree ./cmd/certree
-      - run: sudo apt-get update && sudo apt-get install -y nginx
-      - run: go test -tags=agentintegration -v ./internal/agent
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check Go formatting
+        run: test -z "$(gofmt -l apps/server cmd internal)"
+      - name: Vet Go packages
+        run: go vet ./...
+      - name: Run Go race tests
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Build server and agent
+        run: |
+          mkdir -p .cache
+          go build -o .cache/certree ./apps/server
+          go build -o .cache/certree-agent ./cmd/certree
+      - name: Install isolated agent test prerequisite
+        run: sudo apt-get update && sudo apt-get install -y nginx
+      - name: Verify real Nginx agent deployment and rollback
+        run: go test -tags=agentintegration -v ./internal/agent
+      - name: Scan reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: {go-version: '1.27.1'}
-      - uses: actions/setup-node@v4
-        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - run: npm ci
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install locked web dependencies
+        run: npm ci
         working-directory: apps/web
-      - run: python3 -m unittest discover -s tests -p test_update.py
-      - run: node scripts/validate-openapi.mjs
-      - run: npm run lint && npm test && npm run build && npm audit --audit-level=high
+      - name: Verify installation update tooling
+        run: python3 -m unittest discover -s tests -p test_update.py
+      - name: Validate OpenAPI contract
+        run: node scripts/validate-openapi.mjs
+      - name: Typecheck web console
+        run: npm run lint
         working-directory: apps/web
-      - run: mkdir -p .cache && go build -o .cache/certree ./apps/server && go run ./cmd/lab -generate .cache/lab
-      - run: npx playwright install --with-deps chromium && npm run e2e
+      - name: Test web console
+        run: npm test
         working-directory: apps/web
+      - name: Build web console
+        run: npm run build
+        working-directory: apps/web
+      - name: Audit locked web dependencies
+        run: npm audit --audit-level=high
+        working-directory: apps/web
+      - name: Prepare real API browser fixtures
+        run: |
+          mkdir -p .cache
+          go build -o .cache/certree ./apps/server
+          go run ./cmd/lab -generate .cache/lab
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: Exercise browser workflows against the compiled API
+        run: npm run e2e
+        working-directory: apps/web
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-failure-evidence
+          path: |
+            apps/web/test-results/
+            apps/web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - run: docker compose config --quiet
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate production Compose configuration
+        run: docker compose config --quiet
         env:
           CERTREE_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           CERTREE_ADMIN_USER: ci-config-only
           CERTREE_ADMIN_PASSWORD: ci-config-only-no-deployment
-      - run: docker compose -f compose.lab.yaml up --build --abort-on-container-exit --exit-code-from tests tests
-      - if: always()
-        run: docker compose -f compose.lab.yaml logs && docker compose -f compose.lab.yaml down -v
+      - name: Validate isolated lab configuration
+        run: docker compose -f compose.lab.yaml config --quiet
+      - name: Build actual production image
+        run: docker build --tag certree-ci-smoke .
+      - name: Verify production image starts unprivileged and healthy
+        run: sh scripts/ci-image-smoke.sh certree-ci-smoke
+      - name: Exercise real Nginx, SSH, SMTP and IMAP lifecycle
+        run: docker compose -f compose.lab.yaml up --build --abort-on-container-exit --exit-code-from tests tests
+      - name: Record lab diagnostics
+        if: always()
+        run: docker compose -f compose.lab.yaml logs --no-color
+      - name: Remove disposable lab containers and volumes
+        if: always()
+        run: docker compose -f compose.lab.yaml down -v --remove-orphans
+
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with: {fetch-depth: 0}
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_ENABLE_COMMENTS: 'false'

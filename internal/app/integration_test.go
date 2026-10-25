@@ -74,10 +74,13 @@ func TestNginxLabLifecycle(t *testing.T) {
 		}
 	})
 	c.ok("POST", "certificates/versions/"+version+"/approve", RowTest{}, 200)
-	enqueue := func(v string) string {
-		return c.ok("POST", "deployments", RowTest{"target_id": target, "version_id": v}, 202)["id"].(string)
+	enqueue := func(t *testing.T, v string) string {
+		t.Helper()
+		client := *c
+		client.t = t
+		return client.ok("POST", "deployments", RowTest{"target_id": target, "version_id": v}, 202)["id"].(string)
 	}
-	outcome := func(id, expected string) {
+	outcome := func(t *testing.T, id, expected string) {
 		t.Helper()
 		if !a.WorkOne(context.Background()) {
 			t.Fatal("job not claimed")
@@ -89,11 +92,11 @@ func TestNginxLabLifecycle(t *testing.T) {
 		}
 	}
 	t.Run("real_nginx_deploy_and_verify", func(t *testing.T) {
-		id := enqueue(version)
+		id := enqueue(t, version)
 		if status, _ := c.request("POST", "deployments", RowTest{"target_id": target, "version_id": version}); status != 409 {
 			t.Fatal("duplicate not blocked")
 		}
-		outcome(id, "Success")
+		outcome(t, id, "Success")
 		tree, e := a.BuildTree()
 		if e != nil || tree.Status != "Healthy" {
 			t.Fatal("tree not healthy", e)
@@ -122,13 +125,13 @@ func TestNginxLabLifecycle(t *testing.T) {
 		t.Fatal(e)
 	}
 	c.ok("POST", "certificates/versions/"+old+"/approve", RowTest{}, 200)
-	t.Run("manual_restore_of_previous_version", func(t *testing.T) { outcome(enqueue(old), "Success") })
+	t.Run("manual_restore_of_previous_version", func(t *testing.T) { outcome(t, enqueue(t, old), "Success") })
 	t.Run("nginx_configuration_failure_rolls_back", func(t *testing.T) {
-		id := enqueue(version)
+		id := enqueue(t, version)
 		targetData, _ := a.Store.Target(target)
 		actual := NginxDeployer{}
 		a.Deployer = &configurationFailure{actual: actual}
-		outcome(id, "Rolled Back")
+		outcome(t, id, "Rolled Back")
 		a.Deployer = actual
 		verifier := a.Verifier.Verify(context.Background(), targetData, mustFingerprint(t, f.First))
 		if !verifier.Healthy {
@@ -141,11 +144,11 @@ func TestNginxLabLifecycle(t *testing.T) {
 			t.Fatal("domain validation bypassed")
 		}
 		a.Store.DB.Exec("UPDATE server_endpoints SET sni='lab.test' WHERE id=(SELECT endpoint_id FROM deployment_targets WHERE id=?)", target) // Inject a verifier expectation mismatch while the actual nginx transport stays real.
-		id := enqueue(version)
+		id := enqueue(t, version)
 		realVerifier := a.Verifier
 		alternate, _ := liveTLS(t, f)
 		a.Verifier = mismatchOnce{real: realVerifier, alternate: alternate, reject: mustFingerprint(t, f.Second)}
-		outcome(id, "Rolled Back")
+		outcome(t, id, "Rolled Back")
 		a.Verifier = realVerifier
 	})
 	t.Run("expired_import_cannot_be_approved", func(t *testing.T) {
@@ -157,8 +160,9 @@ func TestNginxLabLifecycle(t *testing.T) {
 			t.Fatal("expired approval accepted")
 		}
 	})
+	lifecycleTest := t
 	t.Run("restart_recovers_interrupted_file_replacement", func(t *testing.T) {
-		id := enqueue(version)
+		id := enqueue(t, version)
 		a.Deployer = interruptedNginx{NginxDeployer{}}
 		crashed := false
 		func() {
@@ -180,7 +184,8 @@ func TestNginxLabLifecycle(t *testing.T) {
 		}
 		a = restarted
 		c.a = restarted
-		t.Cleanup(func() { restarted.Store.Close() })
+		// Keep the restarted database open for the remaining lifecycle subtests.
+		lifecycleTest.Cleanup(func() { restarted.Store.Close() })
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})
 		go func() { a.Run(ctx); close(done) }()
@@ -203,16 +208,16 @@ func TestNginxLabLifecycle(t *testing.T) {
 	})
 	t.Run("missing_backup_records_recovery_failed", func(t *testing.T) {
 		a.Deployer = missingBackupNginx{NginxDeployer{}}
-		outcome(enqueue(version), "Recovery Failed")
+		outcome(t, enqueue(t, version), "Recovery Failed")
 		a.Deployer = NginxDeployer{}
-		outcome(enqueue(old), "Success")
+		outcome(t, enqueue(t, old), "Success")
 	})
 	t.Run("initial_ssh_failure_does_not_claim_rollback", func(t *testing.T) {
 		var raw string
 		a.Store.DB.QueryRow("SELECT config FROM servers WHERE id=?", server).Scan(&raw)
 		bad := ServerConfig{Host: "127.0.0.1", Port: 1, User: "certree", HostKey: string(f.HostPublic), Type: "nginx"}
 		a.Store.DB.Exec("UPDATE servers SET config=? WHERE id=?", encode(bad), server)
-		outcome(enqueue(old), "Failed")
+		outcome(t, enqueue(t, old), "Failed")
 		a.Store.DB.Exec("UPDATE servers SET config=? WHERE id=?", raw, server)
 	})
 }

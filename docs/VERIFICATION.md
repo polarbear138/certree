@@ -1,6 +1,6 @@
 # Verification report
 
-## Current reading guide — 2026-10-24 (Asia/Seoul)
+## Current reading guide — 2026-10-25 (Asia/Seoul)
 
 This file retains historical checkpoints. A passing result describes the revision
 and scope at that checkpoint; it is not a blanket claim for all later source.
@@ -9,7 +9,7 @@ revision. The current application remains a candidate with outstanding release g
 
 | Area | Latest recorded evidence and limit |
 | --- | --- |
-| App backend | `go test ./internal/app` passed during the 2026-10-24 work; a later full-suite attempt was blocked by Windows Application Control |
+| App backend | `go test ./...` and `go vet ./...` passed with Go 1.27.3 on 2026-10-25; earlier blocked attempts remain historical |
 | Frontend and UI | 10 unit tests, production build and two isolated mocked-API browser flows passed at the tree/history checkpoint |
 | Installation updater | Six Python tests passed using mocked Docker calls; no live Linux update execution from the development workspace |
 | Static/API checks | `go vet ./...` and OpenAPI validation passed at the 2026-10-24 checkpoint |
@@ -107,3 +107,23 @@ First complete the release gates and obtain an independent security review. Next
   literal dollar signs in stored config, missing-volume refusal, key conflicts,
   build failure before replacement, and refusing Git pulls over tracked edits.
   These mock Docker calls; a live Linux update was not executed from this workspace.
+
+## Go standard-library security update — 2026-10-25 (Asia/Seoul)
+
+The supplied CI scan reported 13 reachable standard-library vulnerabilities while
+using Go 1.27.1. The project minimum and production/lab Go build images now use
+1.27.3. GitHub setup-go reads the version from go.mod instead of a second hardcoded
+version. The vulnerability scan remains required in the workflow.
+
+Executed locally on Windows/amd64 using Go 1.27.3:
+
+- `go test ./...`: passed, including app and agent packages.
+- `go vet ./...`: passed.
+- `go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...`: exit 0, zero reachable
+  vulnerabilities and zero vulnerable imported packages. One vulnerability remains
+  in a required module whose affected code is not called, according to this scan.
+
+Sources: [Go release history](https://go.dev/doc/devel/release) and an example
+[reported advisory](https://pkg.go.dev/vuln/GO-2026-6613).
+These are local results; the updated remote GitHub workflow, Linux race/real-Nginx
+and Docker image/integration execution still require their own recorded runs.
