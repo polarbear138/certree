@@ -12,9 +12,10 @@ expiry visibility and deployment evidence into one console.
 [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 **Status:** v0.1.0 candidate; the outbound Linux agent is a development preview.
-Source, test fixtures and CI definitions are available. Real Linux Nginx/systemd,
-Docker integration and release/security gates remain to be completed and recorded.
-See the dated [verification report](docs/VERIFICATION.md) for what actually ran.
+Linux race, real Nginx agent, production-image and Docker transport checks have
+[passed in CI](https://github.com/polarbear138/certree/actions/runs/40154857361).
+Actual systemd installation and release/security review remain separate gates.
+See the dated [verification report](docs/VERIFICATION.md) for scope and limits.
 
 ## The problem
 
@@ -200,6 +201,7 @@ these documents.
 | Permissions, backups and recovery | [Operations](docs/OPERATIONS.md) |
 | Security assumptions and private reporting | [Security policy](SECURITY.md) · [Threat model](docs/SECURITY.md) |
 | Test commands and observed results | [Testing](docs/TESTING.md) · [Verification](docs/VERIFICATION.md) |
+| Self-hosted CI checks and publishing scope | [CI/CD](docs/CI_CD.md) |
 | Maintainer workflows and release gates | [Maintaining](docs/MAINTAINING.md) · [Changelog](CHANGELOG.md) |
 
 ## License

@@ -10,9 +10,10 @@
 [운영](docs/OPERATIONS.md) · [기여](CONTRIBUTING.md) · [보안](SECURITY.md)
 
 현재는 **v0.1.0 후보 버전**이며 Linux 에이전트는 개발 프리뷰입니다.
-실제 Linux Nginx/systemd·Docker 통합 테스트와 릴리스 보안 검증은 완료 증거가
-필요합니다. 구현 여부와 실행된 검증 범위는 [검증 보고서](docs/VERIFICATION.md)에서
-구분합니다.
+Linux race·실제 Nginx 에이전트·운영 이미지·Docker 통합 검사는
+[CI에서 통과했습니다](https://github.com/polarbear138/certree/actions/runs/40154857361).
+실제 systemd 설치와 릴리스 보안 검토는 별도 검증이 필요합니다.
+구현 여부와 실행된 검증 범위는 [검증 보고서](docs/VERIFICATION.md)에서 구분합니다.
 
 ## 어떤 문제를 해결하나요?
 

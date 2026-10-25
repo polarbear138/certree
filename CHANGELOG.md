@@ -1,5 +1,23 @@
 # Changelog
 
+## CI pipeline validation — unreleased
+
+- Fix the Docker lifecycle test's restarted database lifetime and associate helper
+  failures with the current subtest.
+- Patch Vite and vulnerable transitive npm dependencies while retaining audit gates.
+- Pin maintained GitHub Actions revisions and Ubuntu 24.04, validate workflows,
+  name separate checks, bound execution and retain browser failure evidence.
+- Build and healthcheck the actual production image and always collect/clean up
+  disposable lab resources. This does not enable registry publishing or deployment
+  to user installations; see docs/CI_CD.md.
+
+## Go security patch update — unreleased
+
+- Raise the minimum Go toolchain and both production/lab Docker build images to
+  1.27.3, including the standard-library security fixes reported against 1.27.1.
+- Read the CI Go version from `go.mod` so tests and vulnerability scanning follow
+  the project toolchain requirement. Keep vulnerability scanning enabled.
+
 ## Documentation and maintainer readiness — unreleased
 
 - Rework the English README around the operational problem, implemented scope,

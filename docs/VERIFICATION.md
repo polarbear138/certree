@@ -1,19 +1,19 @@
 # Verification report
 
-## Current reading guide — 2026-10-24 (Asia/Seoul)
+## Current reading guide — 2026-10-25 (Asia/Seoul)
 
 This file retains historical checkpoints. A passing result describes the revision
 and scope at that checkpoint; it is not a blanket claim for all later source.
-No remote CI run or independent audit was verified as part of this documentation
-revision. The current application remains a candidate with outstanding release gates.
+A successful remote CI run is now recorded below. No independent audit or actual
+systemd service installation was verified. The application remains a candidate.
 
 | Area | Latest recorded evidence and limit |
 | --- | --- |
-| App backend | `go test ./internal/app` passed during the 2026-10-24 work; a later full-suite attempt was blocked by Windows Application Control |
-| Frontend and UI | 10 unit tests, production build and two isolated mocked-API browser flows passed at the tree/history checkpoint |
+| App backend | Local full Go tests/vet and remote Linux race tests passed with Go 1.27.3; earlier blocked attempts remain historical |
+| Frontend and UI | Typecheck, 10 unit tests, production build, audit and browser workflows passed in the successful remote run |
 | Installation updater | Six Python tests passed using mocked Docker calls; no live Linux update execution from the development workspace |
 | Static/API checks | `go vet ./...` and OpenAPI validation passed at the 2026-10-24 checkpoint |
-| Real deployment gates | Linux Nginx/systemd agent, Docker Nginx/OpenSSH/mail integration, Linux race and publication/security gates still need recorded evidence |
+| Real deployment gates | Linux Nginx agent deployment/rollback, Docker Nginx/OpenSSH/mail lifecycle and production-image probe passed remotely; systemd installation, populated-install upgrade and publication/security review remain separate gates |
 | This documentation revision | Local Markdown link/anchor and documented-command consistency review; runtime behavior was not changed |
 
 For a release or support application, attach the actual public commit SHA and CI
@@ -107,3 +107,52 @@ First complete the release gates and obtain an independent security review. Next
   literal dollar signs in stored config, missing-volume refusal, key conflicts,
   build failure before replacement, and refusing Git pulls over tracked edits.
   These mock Docker calls; a live Linux update was not executed from this workspace.
+
+## Go standard-library security update — 2026-10-25 (Asia/Seoul)
+
+The supplied CI scan reported 13 reachable standard-library vulnerabilities while
+using Go 1.27.1. The project minimum and production/lab Go build images now use
+1.27.3. GitHub setup-go reads the version from go.mod instead of a second hardcoded
+version. The vulnerability scan remains required in the workflow.
+
+Executed locally on Windows/amd64 using Go 1.27.3:
+
+- `go test ./...`: passed, including app and agent packages.
+- `go vet ./...`: passed.
+- `go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...`: exit 0, zero reachable
+  vulnerabilities and zero vulnerable imported packages. One vulnerability remains
+  in a required module whose affected code is not called, according to this scan.
+
+Sources: [Go release history](https://go.dev/doc/devel/release) and an example
+[reported advisory](https://pkg.go.dev/vuln/GO-2026-6613).
+These are local results; the updated remote GitHub workflow, Linux race/real-Nginx
+and Docker image/integration execution still require their own recorded runs.
+
+## Complete pipeline validation — 2026-10-25 (Asia/Seoul)
+
+Source: `b55fb747d7f291dc7b1b06fc408f51fa7f68a63e` on the verification branch.
+[GitHub Actions run 40154857361](https://github.com/polarbear138/certree/actions/runs/40154857361)
+completed with **success**. All five jobs completed successfully:
+
+| Job | Recorded scope |
+| --- | --- |
+| workflow-lint | actionlint workflow/expression/action-input validation |
+| backend | Go formatting/vet, Linux race tests, server/agent builds, actual isolated Nginx agent deployment and rollback, reachable Go vulnerability scan |
+| web | Locked npm install, Python updater tests, OpenAPI contract, TypeScript, component tests, production build, dependency audit, compiled-API browser workflows |
+| integration | Both Compose configurations, production image build, unprivileged/read-only image startup and healthcheck, Docker Nginx/OpenSSH/SMTP/IMAP lifecycle, diagnostics and cleanup |
+| secret-scan | Full-history Gitleaks scan |
+
+The earlier `bdb4855` run failed on Go/npm vulnerabilities and an integration-test
+cleanup that closed the restarted DB before later scenarios. Those failures were
+reproduced/diagnosed and corrected, not ignored or excluded. Local npm audit found
+zero vulnerabilities after compatible patches. The Go scanner reported zero
+reachable vulnerabilities; its separate unused-module finding remains documented.
+
+This supersedes older claims that Linux race, the Docker transport suite and the
+real Nginx agent integration have never run. It does not establish actual systemd
+installation, a real populated-install updater run, an independent security audit,
+release artifact provenance or production reliability. No registry image publishing
+or deployment to a user's installation was configured or executed.
+
+PR: [#13](https://github.com/polarbear138/certree/pull/13). The verified source and
+its evidence are reviewable before master is updated.
